@@ -1,0 +1,1046 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Plesový bar</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Instrument+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: phone-first app shell. Sticky top bar, one scrolling column (max 760px), fixed bottom tab bar, bottom sheets for editing.
+   Numbers set in the display face, ticket-style dashed rules, drink colours as the only decoration. */
+:root{
+  --bg:#F2F5F9; --surface:#FFFFFF; --surface-2:#E9EEF4; --ink:#10161F; --muted:#566173; --line:#DAE1EA;
+  --accent:#0B72B5; --accent-ink:#FFFFFF; --accent-soft:#DAEDF9;
+  --good:#17784B; --good-soft:#DAF2E5; --warn:#8F5A05; --warn-soft:#FAEACB; --bad:#B8312B; --bad-soft:#FADFDD; --bad-ink:#FFFFFF;
+  --c1:#0B72B5; --c2:#D9822B; --c3:#7B61D6; --c4:#4F8486;
+  --shadow:0 -6px 30px rgba(16,22,31,.14);
+  --font-display:'Bricolage Grotesque',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --font-body:'Instrument Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --radius:14px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1319; --surface:#161C25; --surface-2:#1F2733; --ink:#EAEFF6; --muted:#98A3B5; --line:#263040;
+    --accent:#5CC8FF; --accent-ink:#062433; --accent-soft:#12303F;
+    --good:#4ADE9A; --good-soft:#12342A; --warn:#F5C45E; --warn-soft:#38300F; --bad:#FF7A72; --bad-soft:#3C1C1A; --bad-ink:#2A0907;
+    --c1:#5CC8FF; --c2:#F0A55A; --c3:#A894F5; --c4:#8FB8BA;
+    --shadow:0 -6px 30px rgba(0,0,0,.5);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1319; --surface:#161C25; --surface-2:#1F2733; --ink:#EAEFF6; --muted:#98A3B5; --line:#263040;
+  --accent:#5CC8FF; --accent-ink:#062433; --accent-soft:#12303F;
+  --good:#4ADE9A; --good-soft:#12342A; --warn:#F5C45E; --warn-soft:#38300F; --bad:#FF7A72; --bad-soft:#3C1C1A; --bad-ink:#2A0907;
+  --c1:#5CC8FF; --c2:#F0A55A; --c3:#A894F5; --c4:#8FB8BA;
+  --shadow:0 -6px 30px rgba(0,0,0,.5);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.45 var(--font-body);-webkit-text-size-adjust:100%}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+h1,h2,h3{font-family:var(--font-display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+p{margin:0}
+small{font-size:12.5px;color:var(--muted)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num,.tab-num{font-variant-numeric:tabular-nums}
+.neg{color:var(--bad)}
+.pos{color:var(--good)}
+
+/* top bar + shell */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);border-bottom:1px solid var(--line)}
+.top-in{max-width:760px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:10px}
+.brand{display:flex;align-items:center;gap:9px;font:700 19px/1 var(--font-display);letter-spacing:-.02em}
+.brand svg{width:24px;height:24px;stroke:var(--accent);fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.chip{margin-left:auto;display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 11px;border-radius:99px;border:1px solid var(--line);background:var(--surface);font-size:12.5px;font-weight:600;color:var(--muted)}
+.chip i{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.chip.cloud i{background:var(--good)}
+.chip.saving i{background:var(--warn)}
+.chip.error i,.chip.readonly i{background:var(--bad)}
+main{max-width:760px;margin:0 auto;padding:18px 16px calc(100px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:26px}
+.page-h{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.page-h h1{font-size:30px;font-weight:700;line-height:1.05}
+.sub{color:var(--muted);margin-top:5px}
+.sec{display:flex;flex-direction:column;gap:12px;min-width:0}
+.sec-h{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.sec-h h2{font-size:18px;font-weight:650}
+.lab{font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.hint{color:var(--muted);font-size:13.5px}
+
+/* buttons, fields */
+.btn{min-height:44px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--muted)}
+.btn.danger{color:var(--bad)}
+.btn.sm{min-height:36px;padding:0 12px;font-size:14px;border-radius:10px}
+.btn.armed{background:var(--bad);color:var(--bad-ink);border-color:transparent}
+.btn.block{width:100%}
+.in{width:100%;min-height:44px;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:16px;min-width:0}
+textarea.in{padding:10px 12px;min-height:90px;line-height:1.4}
+.in:focus{border-color:var(--accent);outline:none}
+select.in{padding-right:8px}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.field>label,.field>.lab{font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pill{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:99px;font-size:12px;font-weight:600;background:var(--surface-2);color:var(--muted);white-space:nowrap}
+.pill.good{background:var(--good-soft);color:var(--good)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.pill.acc{background:var(--accent-soft);color:var(--accent)}
+.dot{display:inline-block;width:11px;height:11px;border-radius:50%;flex:none}
+
+/* lists */
+.list{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.item{display:flex;align-items:center;gap:12px;padding:12px 14px;border:0;border-top:1px solid var(--line);background:none;width:100%;text-align:left;min-width:0}
+.item:first-child{border-top:0}
+button.item:hover{background:var(--surface-2)}
+.grow{flex:1;min-width:0}
+.grow>b,.grow>.t{display:block;font-weight:600;overflow-wrap:anywhere}
+.r{text-align:right;flex:none}
+.r b{display:block;font-variant-numeric:tabular-nums}
+.date{flex:none;width:44px;text-align:center;border-radius:10px;background:var(--surface-2);padding:5px 0}
+.date b{display:block;font:700 18px/1 var(--font-display)}
+.date span{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase}
+.group-h{padding:8px 14px;background:var(--surface-2);font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.empty{border:1px dashed var(--line);border-radius:var(--radius);padding:24px 16px;text-align:center;color:var(--muted);display:flex;flex-direction:column;gap:12px;align-items:center}
+.note{background:var(--accent-soft);border-radius:12px;padding:12px 14px;display:flex;gap:10px 14px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.note span{flex:1;min-width:200px}
+
+/* hero numbers */
+.hero{display:flex;flex-direction:column;gap:16px}
+.hero-num{font:700 clamp(40px,13vw,64px)/1 var(--font-display);letter-spacing:-.03em;font-variant-numeric:tabular-nums;margin-top:6px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px dashed var(--line);padding-top:12px}
+.stats.s4{grid-template-columns:repeat(2,1fr);row-gap:14px}
+.stat{min-width:0}
+.stat+.stat{padding-left:14px;border-left:1px dashed var(--line)}
+.stats.s4 .stat:nth-child(3){padding-left:0;border-left:0}
+.stat b{display:block;font:650 20px/1.2 var(--font-display);font-variant-numeric:tabular-nums;margin-top:3px}
+.inv{display:flex;flex-direction:column;gap:8px}
+.inv-h{display:flex;justify-content:space-between;gap:10px;font-weight:600}
+.track{height:9px;border-radius:99px;background:var(--surface-2);overflow:hidden}
+.track>span{display:block;height:100%;border-radius:99px;transition:width .25s}
+
+/* charts */
+.chart{width:100%;height:auto;display:block;max-width:540px;margin:0 auto}
+.chart .bar{fill:var(--c1)}
+.chart .bar.neg{fill:var(--bad)}
+.chart .axis{stroke:var(--line);stroke-width:1}
+.chart .lbl{fill:var(--ink);font:600 10px var(--font-body)}
+.chart .lbl.dim{fill:var(--muted);font-weight:500}
+.stack{display:flex;height:14px;border-radius:99px;overflow:hidden;background:var(--surface-2);gap:2px}
+.stack span{display:block;height:100%;min-width:0;transition:width .25s}
+.s1{background:var(--c1)}.s2{background:var(--c2)}.s3{background:var(--c3)}.s4{background:var(--c4)}
+.legend{display:grid;gap:9px}
+.lg{display:flex;align-items:center;gap:9px}
+.lg i{width:11px;height:11px;border-radius:3px;flex:none}
+.lg b{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:600}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.bars{display:flex;flex-direction:column;gap:14px}
+.bar-row{display:flex;flex-direction:column;gap:6px}
+.bar-top{display:flex;align-items:center;gap:8px}
+.bar-top b{font-weight:600}
+.bar-top .v{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:600}
+
+/* event detail */
+.crumb{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:-10px}
+.sale{padding:12px 14px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.sale:first-child{border-top:0}
+.sale-top{display:flex;align-items:center;gap:10px}
+.sale-sum{font-size:13px;color:var(--muted);padding-left:21px;font-variant-numeric:tabular-nums}
+.stepper{display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface);flex:none}
+.stepper button{width:38px;height:42px;border:0;background:var(--surface-2);font-size:19px;line-height:1}
+.stepper input{width:56px;text-align:center;border:0;min-height:42px;background:transparent;font-size:16px;font-variant-numeric:tabular-nums;outline:none}
+.srow{padding:12px 14px;border-top:1px solid var(--line);display:grid;grid-template-columns:1fr 40px;gap:8px}
+.srow:first-child{border-top:0}
+.srow .sub2{grid-column:1/-1;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.srow .sub2 label{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.srow .sub2 .in{width:78px;min-height:38px}
+.srow .sub2 b{margin-left:auto;font-variant-numeric:tabular-nums}
+.crow{padding:12px 14px;border-top:1px solid var(--line);display:grid;grid-template-columns:1fr 112px 40px;gap:8px;align-items:center}
+.crow:first-child{border-top:0}
+.foot{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border-top:1px solid var(--line);background:var(--surface-2);font-weight:600}
+.plan-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
+.pg{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600}
+.pg span{display:flex;align-items:center;gap:7px}
+.tbl-wrap{overflow-x:auto}
+.tbl{border-collapse:collapse;width:100%;font-size:14px}
+.tbl th{font-size:11.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl td{padding:9px 8px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;vertical-align:top}
+.tbl th:not(:first-child),.tbl td:not(:first-child){text-align:right}
+.tbl tfoot td{font-weight:700;border-bottom:0}
+.actions{display:flex;flex-wrap:wrap;gap:10px}
+
+/* sheets */
+.sheet-wrap{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-end;justify-content:center}
+.sheet-bg{position:absolute;inset:0;background:rgba(8,12,18,.55)}
+.sheet{position:relative;background:var(--surface);width:100%;max-width:640px;max-height:92dvh;border-radius:20px 20px 0 0;display:flex;flex-direction:column;box-shadow:var(--shadow)}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 18px 6px}
+.sheet-head h2{font-size:20px}
+.sheet-body{overflow:auto;padding:10px 18px 18px;display:flex;flex-direction:column;gap:14px;min-height:0}
+.sheet-foot{display:flex;gap:10px;padding:12px 18px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line)}
+.sheet-foot .btn{flex:1}
+.swatches{display:flex;gap:10px;flex-wrap:wrap}
+.sw{width:34px;height:34px;border-radius:50%;border:3px solid transparent;box-shadow:0 0 0 1px var(--line)}
+.sw[aria-pressed=true]{border-color:var(--surface);box-shadow:0 0 0 3px var(--accent)}
+.irow{display:grid;grid-template-columns:1fr 40px;gap:8px;padding:10px 0;border-top:1px dashed var(--line)}
+.irow:first-child{border-top:0}
+.irow .amt{grid-column:1/2;display:flex;align-items:center;gap:8px}
+.irow .amt .in{width:96px}
+.irow .amt .u{color:var(--muted);font-size:13px;min-width:22px}
+.irow .cst{margin-left:auto;font-weight:600;font-variant-numeric:tabular-nums}
+.prev{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;background:var(--surface-2);border-radius:12px;padding:14px}
+.prev b{display:block;font:650 18px/1.2 var(--font-display);font-variant-numeric:tabular-nums;margin-top:2px}
+.map-row{display:grid;grid-template-columns:1fr;gap:6px;padding:10px 0;border-top:1px dashed var(--line)}
+.map-row:first-child{border-top:0}
+.check{display:flex;gap:10px;align-items:flex-start;font-size:14px}
+.check input{width:20px;height:20px;margin-top:1px;flex:none}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(78px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;z-index:60;max-width:calc(100vw - 32px);text-align:center}
+
+/* tab bar */
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+.tabs-in{max-width:760px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr)}
+.tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:58px;padding:6px 0;font-size:11.5px;font-weight:600;color:var(--muted);background:none;border:0}
+.tab svg{width:23px;height:23px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tab[aria-current=page]{color:var(--accent)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header class="top"><div class="top-in">
+  <div class="brand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16l-8 9z"/><path d="M12 13v7M8 20h8"/></svg>Plesový bar</div>
+  <button class="chip" id="syncChip" data-act="sync-info" type="button"><i></i><span>Lokálně</span></button>
+</div></header>
+<main id="app"></main>
+<nav class="tabs" aria-label="Hlavní navigace"><div class="tabs-in" id="tabs"></div></nav>
+<div class="sheet-wrap" id="sheet" hidden>
+  <div class="sheet-bg" data-act="close-sheet"></div>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <div class="sheet-head"><h2 id="sheetTitle"></h2><button class="btn ghost sm" type="button" data-act="close-sheet" aria-label="Zavřít">✕</button></div>
+    <div class="sheet-body" id="sheetBody"></div>
+    <div class="sheet-foot" id="sheetFoot"></div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function(){
+'use strict';
+
+/* ================= helpers ================= */
+var $=function(s,r){return (r||document).querySelector(s)};
+var $$=function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s))};
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function uid(){return Math.random().toString(36).slice(2,9)}
+var nf0=new Intl.NumberFormat('cs-CZ',{maximumFractionDigits:0});
+var nf1=new Intl.NumberFormat('cs-CZ',{maximumFractionDigits:1});
+var nf2=new Intl.NumberFormat('cs-CZ',{minimumFractionDigits:2,maximumFractionDigits:2});
+var NB=' ';
+function kc(n,d){n=Number(n)||0;if(d!==2&&Math.abs(n)<0.5)n=0;return (d===2?nf2:nf0).format(n)+NB+'Kč'}
+function pc(n){return nf0.format(n)+NB+'%'}
+function fk(v){var a=Math.abs(v);var s=a>=1000?nf1.format(a/1000)+'k':nf0.format(a);return (v<0?'−':'')+s}
+function plural(n,one,few,many){return n===1?one:(n>=2&&n<=4?few:many)}
+function parseNum(v){
+  if(typeof v==='number')return v;
+  var s=String(v==null?'':v).trim().replace(/[\s ]/g,'').replace(/[^\d,.\-+]/g,'');
+  if(!s)return NaN;
+  var lc=s.lastIndexOf(','),ld=s.lastIndexOf('.');
+  if(lc>-1&&ld>-1){ if(lc>ld)s=s.replace(/\./g,'').replace(',','.'); else s=s.replace(/,/g,''); }
+  else if(lc>-1){ s=s.replace(',','.'); }
+  else if(ld>-1&&(s.match(/\./g)||[]).length>1){ s=s.replace(/\./g,''); }
+  var n=parseFloat(s);return isFinite(n)?n:NaN;
+}
+function num(el){var n=parseNum(el.value);return isFinite(n)?n:0}
+function numStr(n){return (n===0||n==null||!isFinite(n))?'':String(Math.round(n*1000)/1000).replace('.',',')}
+function round2(n){return Math.round(n*100)/100}
+function todayStr(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function parseD(s){return new Date(s+'T12:00:00')}
+function fdate(s){return s?parseD(s).toLocaleDateString('cs-CZ',{day:'numeric',month:'numeric',year:'numeric'}):''}
+function fshort(s){return parseD(s).toLocaleDateString('cs-CZ',{day:'numeric',month:'numeric'})}
+function daysUntil(s){return Math.round((parseD(s)-parseD(todayStr()))/86400000)}
+function norm(s){return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim()}
+
+/* ================= state ================= */
+var LS_KEY='plesovy-bar-v1', LS_VIEW='plesovy-bar-view';
+var DRINK_COLORS=['#E8772E','#58A55C','#8A5A3C','#8FC7D4','#F2C14E','#B6D36B','#D6567A','#7B61D6'];
+var DEFAULT_SETTINGS={feePct:1.5,reservePct:10,defaultRate:150,targetPct:30,investment:12000,importMap:{}};
+
+function emptyState(){return {v:1,settings:JSON.parse(JSON.stringify(DEFAULT_SETTINGS)),ingredients:[],drinks:[],events:[]}}
+
+function seed(){
+  function ing(id,name,cat,unit,pack,price){return {id:id,name:name,cat:cat,unit:unit,pack:pack,price:price}}
+  var ingredients=[
+    ing('rum','Rum bílý','Alkohol','ml',700,299),ing('aperol','Aperol','Alkohol','ml',700,289),ing('prosecco','Prosecco','Alkohol','ml',750,169),
+    ing('gin','Gin','Alkohol','ml',700,349),ing('vodka','Vodka','Alkohol','ml',700,199),ing('tequila','Tequila','Alkohol','ml',700,349),ing('triple','Triple sec','Alkohol','ml',700,229),
+    ing('cola','Cola','Mix','ml',2000,45),ing('tonic','Tonic','Mix','ml',1000,49),ing('soda','Soda','Mix','ml',1500,25),ing('dzus','Pomerančový džus','Mix','ml',1000,45),ing('sirup','Cukrový sirup','Mix','ml',1000,59),
+    ing('limetka','Limetka','Ostatní','ks',1,8),ing('mata','Máta','Ostatní','g',50,29),ing('led','Led','Ostatní','g',3000,49),ing('kelimek','Kelímek + brčko','Ostatní','ks',50,139)
+  ];
+  function dr(id,name,price,color,items){return {id:id,name:name,price:price,color:color,active:true,items:items.map(function(x){return {ing:x[0],amt:x[1]}})}}
+  var drinks=[
+    dr('mojito','Mojito',109,DRINK_COLORS[1],[['rum',40],['limetka',0.5],['mata',5],['sirup',20],['soda',80],['led',100],['kelimek',1]]),
+    dr('spritz','Aperol Spritz',99,DRINK_COLORS[0],[['aperol',40],['prosecco',60],['soda',40],['led',100],['kelimek',1]]),
+    dr('cuba','Cuba Libre',89,DRINK_COLORS[2],[['rum',40],['cola',120],['limetka',0.25],['led',100],['kelimek',1]]),
+    dr('gintonic','Gin Tonic',99,DRINK_COLORS[3],[['gin',40],['tonic',140],['limetka',0.25],['led',100],['kelimek',1]]),
+    dr('vodkajuice','Vodka Juice',79,DRINK_COLORS[4],[['vodka',40],['dzus',140],['led',100],['kelimek',1]]),
+    dr('margarita','Margarita',119,DRINK_COLORS[6],[['tequila',40],['triple',20],['limetka',1],['sirup',10],['led',100],['kelimek',1]])
+  ];
+  function sales(q){var s={};drinks.forEach(function(d,i){if(q[i])s[d.id]={qty:q[i],revenue:q[i]*d.price}});return s}
+  function staff(n,h,r){var names=['Barman','Barmanka','Výpomoc','Pokladna','Runner'];var a=[];for(var i=0;i<n;i++)a.push({id:uid(),name:names[i]||('Brigádník '+(i+1)),hours:h,rate:r});return a}
+  function cost(l,a){return {id:uid(),label:l,amount:a}}
+  function ev(name,date,place,st,costs,sl,total){return {id:uid(),name:name,date:date,place:place,note:'',demo:true,staff:st,costs:costs,sales:sl,otherRevenue:0,plan:{},planTotal:total||0}}
+  var s=emptyState();
+  s.ingredients=ingredients;s.drinks=drinks;
+  s.events=[
+    ev('Ples gymnázia','2026-09-19','Chrudim',staff(3,7,140),[cost('Nájem baru',1500),cost('Led a doprava',450)],sales([74,96,81,58,102,44])),
+    ev('Maturitní ples','2026-09-26','Pardubice',staff(4,8,140),[cost('Nájem baru',2500),cost('Led a doprava',600)],sales([110,131,97,76,121,63])),
+    ev('Firemní večírek','2026-10-03','Chrast',staff(2,6,150),[cost('Nájem baru',800)],sales([52,88,40,69,35,28])),
+    ev('Reprezentační ples','2026-11-14','Hradec Králové',staff(4,8,150),[cost('Nájem baru',3000)],{},650)
+  ];
+  return s;
+}
+
+function normalize(s){
+  var d=emptyState();
+  s=s&&typeof s==='object'?s:{};
+  d.settings=Object.assign({},DEFAULT_SETTINGS,s.settings||{});
+  if(!d.settings.importMap||typeof d.settings.importMap!=='object')d.settings.importMap={};
+  d.ingredients=Array.isArray(s.ingredients)?s.ingredients:[];
+  d.drinks=(Array.isArray(s.drinks)?s.drinks:[]).map(function(x){x.items=Array.isArray(x.items)?x.items:[];if(x.active==null)x.active=true;if(!x.color)x.color=DRINK_COLORS[0];return x});
+  d.events=(Array.isArray(s.events)?s.events:[]).map(function(e){e.staff=Array.isArray(e.staff)?e.staff:[];e.costs=Array.isArray(e.costs)?e.costs:[];e.sales=e.sales&&typeof e.sales==='object'?e.sales:{};e.plan=e.plan&&typeof e.plan==='object'?e.plan:{};e.otherRevenue=e.otherRevenue||0;e.planTotal=e.planTotal||0;return e});
+  return d;
+}
+
+var state=null, localRev=0, view={tab:'dash',eventId:null}, sheet=null, imp=null;
+var dbDoc=null, clientId=uid(), saveTimer=null, writing=false, pendingWrite=false, syncState='local';
+
+function loadLocal(){
+  try{var raw=localStorage.getItem(LS_KEY);if(raw){var o=JSON.parse(raw);if(o&&o.state){localRev=o.rev||0;return normalize(o.state)}}}catch(e){}
+  return null;
+}
+function persistLocal(){try{localStorage.setItem(LS_KEY,JSON.stringify({rev:localRev,state:state}))}catch(e){}}
+function persistView(){try{localStorage.setItem(LS_VIEW,JSON.stringify({tab:view.tab,eventId:view.eventId}))}catch(e){}}
+function loadView(){try{var v=JSON.parse(localStorage.getItem(LS_VIEW)||'null');if(v&&v.tab)view={tab:v.tab,eventId:v.eventId||null}}catch(e){}}
+
+var SYNC_TXT={local:['Lokálně','Data jsou jen v tomto prohlížeči. Zálohuj je v Více › Data.'],saving:['Ukládám…','Ukládám změny.'],cloud:['Cloud','Data jsou uložená v cloudu u této aplikace a sdílejí se s lidmi, kteří ji smějí upravovat.'],readonly:['Jen čtení','Tvoje oprávnění neumožňuje ukládat změny do cloudu. Změny zůstanou jen v tomto prohlížeči.'],error:['Chyba','Uložení do cloudu se nepovedlo, data zůstala v tomto prohlížeči. Zkus to znovu změnou libovolného údaje.']};
+function setSync(s){
+  syncState=s;var c=$('#syncChip');if(!c)return;
+  c.className='chip '+s;$('span',c).textContent=SYNC_TXT[s][0];c.title=SYNC_TXT[s][1];
+}
+function touch(){
+  localRev=Date.now();persistLocal();
+  setSync(dbDoc?'saving':'local');
+  clearTimeout(saveTimer);saveTimer=setTimeout(flush,700);
+}
+function flush(){
+  if(!dbDoc)return;
+  if(writing){pendingWrite=true;return}
+  writing=true;
+  dbDoc.set({json:JSON.stringify(state),rev:localRev,by:clientId}).then(function(){setSync('cloud')}).catch(function(e){
+    setSync(e&&e.code==='invalid_argument'?'readonly':'error');
+  }).then(function(){writing=false;if(pendingWrite){pendingWrite=false;flush()}});
+}
+function adoptRemote(d){
+  try{state=normalize(JSON.parse(d.json));localRev=d.rev||0;persistLocal();scheduleRender()}catch(e){}
+}
+var renderTries=0;
+function scheduleRender(){
+  var a=document.activeElement;
+  var typing=a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA'||a.tagName==='SELECT')&&(a.closest('#app')||a.closest('#sheet'));
+  if(typing&&renderTries<6){renderTries++;setTimeout(scheduleRender,1500);return}
+  renderTries=0;
+  if(sheet&&sheet.type!=='info')return;
+  render();
+}
+function initDb(){
+  if(!(window.claude&&typeof window.claude.use==='function'))return;
+  window.claude.use('db').then(function(db){
+    if(!db)return;
+    dbDoc=db.doc('app/state');
+    var first=true;
+    dbDoc.onSnapshot(function(snap){
+      var d=snap.exists?snap.data():null;
+      if(first){
+        first=false;
+        if(d&&d.json){
+          if((d.rev||0)>localRev||localRev===0){adoptRemote(d);setSync('cloud')}
+          else{setSync('saving');flush()}
+        }else if(localRev>0){setSync('saving');flush()}
+        else setSync('cloud');
+        return;
+      }
+      if(d&&d.json&&d.by!==clientId&&(d.rev||0)>localRev){adoptRemote(d);setSync('cloud')}
+    },function(){setSync('error')});
+  }).catch(function(){});
+}
+
+/* ================= calculations ================= */
+function ingMap(){var m={};state.ingredients.forEach(function(i){m[i.id]=i});return m}
+function unitPrice(i){return i&&i.pack>0?i.price/i.pack:0}
+function drinkCost(d,m){m=m||ingMap();return d.items.reduce(function(s,it){return s+(it.amt||0)*unitPrice(m[it.ing])},0)}
+function costClass(share){var t=state.settings.targetPct;return share<=t?'good':(share<=t+8?'warn':'bad')}
+
+function calc(e){
+  var m=ingMap(),rows=[],rev=0,ing=0,units=0;
+  state.drinks.forEach(function(d){
+    var s=e.sales[d.id];
+    if(!s&&!d.active)return;
+    var qty=s?s.qty||0:0,revenue=s?s.revenue||0:0;
+    var unitCost=(s&&s.unitCost!=null)?s.unitCost:drinkCost(d,m);
+    var cost=qty*unitCost;
+    rows.push({d:d,qty:qty,revenue:revenue,unitCost:unitCost,cost:cost,profit:revenue-cost});
+    rev+=revenue;ing+=cost;units+=qty;
+  });
+  var other=e.otherRevenue||0;rev+=other;
+  var staff=e.staff.reduce(function(s,x){return s+(x.hours||0)*(x.rate||0)},0);
+  var costs=e.costs.reduce(function(s,x){return s+(x.amount||0)},0);
+  var fee=rev*state.settings.feePct/100;
+  var cost=ing+staff+costs+fee,profit=rev-cost;
+  return {rows:rows,rev:rev,ing:ing,staff:staff,other:costs,fee:fee,cost:cost,profit:profit,margin:rev>0?profit/rev*100:0,units:units,otherRev:other};
+}
+function played(){return state.events.filter(function(e){return calc(e).rev>0}).sort(function(a,b){return a.date<b.date?-1:1})}
+function totals(){
+  var T={events:played(),rev:0,ing:0,staff:0,other:0,fee:0,cost:0,profit:0,units:0,drinks:{}};
+  T.events.forEach(function(e){
+    var c=calc(e);T.rev+=c.rev;T.ing+=c.ing;T.staff+=c.staff;T.other+=c.other;T.fee+=c.fee;T.cost+=c.cost;T.profit+=c.profit;T.units+=c.units;
+    c.rows.forEach(function(r){if(!r.qty)return;var t=T.drinks[r.d.id]||(T.drinks[r.d.id]={d:r.d,qty:0,rev:0,cost:0});t.qty+=r.qty;t.rev+=r.revenue;t.cost+=r.cost});
+  });
+  T.margin=T.rev>0?T.profit/T.rev*100:0;
+  return T;
+}
+function planNeeds(e){
+  var m=ingMap(),need={},res=state.settings.reservePct/100;
+  state.drinks.forEach(function(d){var q=e.plan[d.id]||0;if(!q)return;d.items.forEach(function(it){need[it.ing]=(need[it.ing]||0)+(it.amt||0)*q})});
+  var rows=[],total=0;
+  Object.keys(need).forEach(function(id){
+    var i=m[id];if(!i)return;
+    var n=need[id]*(1+res),packs=i.pack>0?Math.ceil(n/i.pack-1e-9):0,cost=packs*i.price;total+=cost;
+    rows.push({i:i,need:n,packs:packs,cost:cost});
+  });
+  var order={'Alkohol':0,'Mix':1,'Ostatní':2};
+  rows.sort(function(a,b){return (order[a.i.cat]||0)-(order[b.i.cat]||0)||a.i.name.localeCompare(b.i.name,'cs')});
+  return {rows:rows,total:total};
+}
+function historyShares(exceptId){
+  var tot={},sum=0;
+  state.events.forEach(function(e){if(e.id===exceptId)return;Object.keys(e.sales).forEach(function(id){var q=e.sales[id].qty||0;tot[id]=(tot[id]||0)+q;sum+=q})});
+  var act=state.drinks.filter(function(d){return d.active}),sh={};
+  if(sum>0){act.forEach(function(d){sh[d.id]=(tot[d.id]||0)/sum})}
+  else{act.forEach(function(d){sh[d.id]=1/(act.length||1)})}
+  return sh;
+}
+
+/* ================= rendering ================= */
+var ICONS={
+  dash:'<path d="M5 20v-7M12 20V5M19 20V10"/>',
+  events:'<rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M8 3v4M16 3v4M3.5 10h17"/>',
+  drinks:'<path d="M4 4h16l-8 9z"/><path d="M12 13v7M8 20h8"/>',
+  ings:'<path d="M10 3h4v4l2 3v10a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V10l2-3z"/><path d="M8 14h8"/>',
+  more:'<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>'
+};
+var TABS=[['dash','Přehled'],['events','Akce'],['drinks','Drinky'],['ings','Suroviny'],['more','Více']];
+
+function pageHead(title,sub,action){return '<div class="page-h"><div><h1>'+esc(title)+'</h1>'+(sub?'<p class="sub">'+sub+'</p>':'')+'</div>'+(action||'')+'</div>'}
+function stackBar(parts,live){
+  var tot=parts.reduce(function(s,p){return s+Math.max(0,p.v)},0)||1;
+  var bar='<div class="stack" role="img" aria-label="Struktura nákladů">'+parts.map(function(p,i){return '<span class="s'+(i+1)+'" '+(live?'data-w="'+p.k+'" ':'')+'style="width:'+(Math.max(0,p.v)/tot*100).toFixed(1)+'%"></span>'}).join('')+'</div>';
+  var lg='<div class="legend">'+parts.map(function(p,i){return '<div class="lg"><i class="s'+(i+1)+'"></i><span>'+esc(p.l)+'</span><b '+(live?'data-live="b-'+p.k+'"':'')+'>'+kc(p.v)+'</b></div>'}).join('')+'</div>';
+  return bar+lg;
+}
+function barChart(data){
+  var W=360,H=200,pt=24,pb=36,pl=6,pr=6;
+  var vals=data.map(function(d){return d.v});
+  var max=Math.max.apply(null,vals.concat([0])),min=Math.min.apply(null,vals.concat([0])),range=(max-min)||1;
+  function y(v){return pt+(max-v)/range*(H-pt-pb)}
+  var y0=y(0),step=(W-pl-pr)/data.length,bw=Math.min(40,step*0.62);
+  var s='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Zisk podle akcí" class="chart"><line class="axis" x1="'+pl+'" x2="'+(W-pr)+'" y1="'+y0.toFixed(1)+'" y2="'+y0.toFixed(1)+'"/>';
+  data.forEach(function(d,i){
+    var x=pl+step*i+(step-bw)/2,yy=y(d.v),top=Math.min(yy,y0),h=Math.max(1,Math.abs(yy-y0)),cx=(x+bw/2).toFixed(1);
+    s+='<rect class="bar'+(d.v<0?' neg':'')+'" x="'+x.toFixed(1)+'" y="'+top.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="4"/>';
+    s+='<text class="lbl" x="'+cx+'" y="'+(d.v>=0?top-5:top+h+12).toFixed(1)+'" text-anchor="middle">'+fk(d.v)+'</text>';
+    s+='<text class="lbl dim" x="'+cx+'" y="'+(H-pb+16)+'" text-anchor="middle">'+esc(d.l)+'</text>';
+  });
+  return s+'</svg>';
+}
+
+function renderDash(){
+  var T=totals(),pl=T.events,demo=state.events.some(function(e){return e.demo}),h='';
+  h+=pageHead('Přehled',pl.length?pl.length+' '+plural(pl.length,'odehraná akce','odehrané akce','odehraných akcí')+' · '+nf0.format(T.units)+' prodaných drinků':'Zatím žádné odehrané akce');
+  if(demo)h+='<div class="note"><span>Ukázková data. Ceny, drinky i akce jsou vymyšlené, aby šly hned zkusit grafy a výpočty.</span><button class="btn sm" type="button" data-act="del-demo" data-confirm="Opravdu smazat?">Smazat ukázkové akce</button></div>';
+  if(!pl.length){
+    h+='<div class="empty"><p>Až do akce zadáš prodeje (ručně nebo importem ze SumUpu), tady se objeví zisk, marže a grafy.</p><button class="btn primary" type="button" data-act="goto-events">Přejít na akce</button></div>';
+  }else{
+    h+='<section class="hero"><div><span class="lab">Čistý zisk ze všech akcí</span><div class="hero-num '+(T.profit<0?'neg':'')+'">'+kc(T.profit)+'</div></div>'+
+      '<div class="stats"><div class="stat"><span class="lab">Tržba</span><b>'+kc(T.rev)+'</b></div><div class="stat"><span class="lab">Náklady</span><b>'+kc(T.cost)+'</b></div><div class="stat"><span class="lab">Marže</span><b>'+pc(T.margin)+'</b></div></div>';
+    var inv=state.settings.investment;
+    if(inv>0){
+      var pct=Math.max(0,Math.min(100,T.profit/inv*100)),paid=T.profit>=inv;
+      h+='<div class="inv"><div class="inv-h"><span>Návratnost investice '+kc(inv)+'</span><b class="'+(paid?'pos':'')+'">'+(paid?'Splaceno':pc(pct))+'</b></div><div class="track"><span style="width:'+pct.toFixed(1)+'%;background:'+(paid?'var(--good)':'var(--accent)')+'"></span></div><small>'+(paid?'Nad rámec investice vyděláno '+kc(T.profit-inv):'Do návratnosti zbývá '+kc(inv-T.profit))+'</small></div>';
+    }
+    h+='</section>';
+    var last=pl.slice(-12).map(function(e){return {v:Math.round(calc(e).profit),l:fshort(e.date)}});
+    h+='<section class="sec"><div class="sec-h"><h2>Zisk podle akcí</h2></div><div class="panel">'+barChart(last)+'</div></section>';
+    var dl=Object.keys(T.drinks).map(function(k){return T.drinks[k]}).sort(function(a,b){return b.qty-a.qty});
+    if(dl.length){
+      var mx=dl[0].qty||1;
+      h+='<section class="sec"><div class="sec-h"><h2>Co se prodává</h2></div><div class="panel bars">'+dl.map(function(t){
+        var pr=t.rev-t.cost;
+        return '<div class="bar-row"><div class="bar-top"><i class="dot" style="background:'+esc(t.d.color)+'"></i><b>'+esc(t.d.name)+'</b><span class="v">'+nf0.format(t.qty)+NB+'ks</span></div><div class="track"><span style="width:'+(t.qty/mx*100).toFixed(1)+'%;background:'+esc(t.d.color)+'"></span></div><small>Tržba '+kc(t.rev)+' · hrubý zisk '+kc(pr)+' · '+kc(pr/t.qty)+' na kus</small></div>';
+      }).join('')+'</div></section>';
+    }
+    h+='<section class="sec"><div class="sec-h"><h2>Kam jdou peníze</h2></div><div class="panel">'+stackBar([{k:'ing',l:'Suroviny',v:T.ing},{k:'staff',l:'Mzdy',v:T.staff},{k:'other',l:'Nájem a ostatní',v:T.other},{k:'fee',l:'Poplatky terminálu',v:T.fee}])+'</div></section>';
+  }
+  var up=state.events.filter(function(e){return e.date>=todayStr()&&calc(e).rev===0}).sort(function(a,b){return a.date<b.date?-1:1})[0];
+  if(up){
+    var du=daysUntil(up.date),pn=planNeeds(up);
+    h+='<section class="sec"><div class="sec-h"><h2>Nejbližší akce</h2></div><button class="list item" type="button" data-act="open-event" data-id="'+up.id+'" style="padding:14px"><div class="date"><b>'+parseD(up.date).getDate()+'</b><span>'+parseD(up.date).toLocaleDateString('cs-CZ',{month:'short'})+'</span></div><div class="grow"><div class="t">'+esc(up.name)+'</div><small>'+(du===0?'dnes':du===1?'zítra':'za '+du+' '+plural(du,'den','dny','dní'))+(up.place?' · '+esc(up.place):'')+'</small></div><div class="r">'+(up.planTotal?'<b>'+nf0.format(up.planTotal)+NB+'drinků</b><small>nákup cca '+kc(pn.total)+'</small>':'<small>bez plánu nákupu</small>')+'</div></button></section>';
+  }
+  return h;
+}
+
+function evItem(e){
+  var c=calc(e),d=parseD(e.date),up=e.date>=todayStr()&&c.rev===0;
+  var right=c.rev>0?'<b class="'+(c.profit<0?'neg':'')+'">'+(c.profit>0?'+':'')+kc(c.profit)+'</b><small>marže '+pc(c.margin)+'</small>':(up?'<span class="pill acc">Plán</span>':'<span class="pill">Bez prodejů</span>');
+  var du=daysUntil(e.date);
+  var meta=[];if(e.place)meta.push(esc(e.place));
+  if(c.rev>0)meta.push(nf0.format(c.units)+NB+'drinků');else if(up)meta.push(du===0?'dnes':du===1?'zítra':'za '+du+' '+plural(du,'den','dny','dní'));
+  return '<button class="item" type="button" data-act="open-event" data-id="'+e.id+'"><div class="date"><b>'+d.getDate()+'</b><span>'+d.toLocaleDateString('cs-CZ',{month:'short'})+'</span></div><div class="grow"><div class="t">'+esc(e.name||'Akce')+(e.demo?' <span class="pill">Ukázka</span>':'')+'</div><small>'+meta.join(' · ')+'</small></div><div class="r">'+right+'</div></button>';
+}
+function renderEvents(){
+  var h=pageHead('Akce',state.events.length+' '+plural(state.events.length,'akce','akce','akcí'),'<button class="btn primary sm" type="button" data-act="new-event">+ Nová akce</button>');
+  if(!state.events.length)return h+'<div class="empty"><p>Přidej první ples nebo večírek. Pak k němu zadáš zaměstnance, nájem a prodeje.</p><button class="btn primary" type="button" data-act="new-event">+ Nová akce</button></div>';
+  var t=todayStr(),up=[],past=[];
+  state.events.forEach(function(e){(e.date>=t&&calc(e).rev===0?up:past).push(e)});
+  up.sort(function(a,b){return a.date<b.date?-1:1});past.sort(function(a,b){return a.date<b.date?1:-1});
+  if(up.length)h+='<section class="sec"><div class="sec-h"><h2>Nadcházející</h2></div><div class="list">'+up.map(evItem).join('')+'</div></section>';
+  if(past.length)h+='<section class="sec"><div class="sec-h"><h2>Odehrané</h2></div><div class="list">'+past.map(evItem).join('')+'</div></section>';
+  return h;
+}
+
+function saleSum(r){return r.qty?kc(r.revenue)+' · zisk '+kc(r.profit):'Bez prodeje'}
+function shopHtml(e){
+  var p=planNeeds(e);
+  if(!p.rows.length)return '<p class="hint">Zadej očekávaný počet drinků nebo porce u jednotlivých drinků. Spočítám, kolik balení nakoupit.</p>';
+  return '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Surovina</th><th>Potřeba</th><th>Nákup</th><th>Cena</th></tr></thead><tbody>'+p.rows.map(function(r){
+    return '<tr><td>'+esc(r.i.name)+'</td><td>'+nf0.format(Math.ceil(r.need))+NB+esc(r.i.unit)+'</td><td>'+r.packs+'×'+NB+nf0.format(r.i.pack)+NB+esc(r.i.unit)+'</td><td>'+kc(r.cost)+'</td></tr>';
+  }).join('')+'</tbody><tfoot><tr><td colspan="3">Odhad nákupu (s rezervou '+pc(state.settings.reservePct)+')</td><td>'+kc(p.total)+'</td></tr></tfoot></table></div>';
+}
+function renderEvent(id){
+  var e=state.events.find(function(x){return x.id===id});
+  if(!e){view.eventId=null;return renderEvents()}
+  var c=calc(e),h='';
+  h+='<div class="crumb"><button class="btn ghost sm" type="button" data-act="back">‹ Všechny akce</button><button class="btn sm" type="button" data-act="edit-event">Upravit údaje</button></div>';
+  h+=pageHead(e.name||'Akce',[fdate(e.date),esc(e.place||'')].filter(Boolean).join(' · ')+(e.note?'<br><small>'+esc(e.note)+'</small>':''));
+  h+='<section class="hero"><div class="stats s4">'+
+    '<div class="stat"><span class="lab">Tržba</span><b data-live="k-rev">'+kc(c.rev)+'</b></div>'+
+    '<div class="stat"><span class="lab">Náklady</span><b data-live="k-cost">'+kc(c.cost)+'</b></div>'+
+    '<div class="stat"><span class="lab">Čistý zisk</span><b data-live="k-profit" data-signed class="'+(c.profit<0?'neg':'')+'">'+kc(c.profit)+'</b></div>'+
+    '<div class="stat"><span class="lab">Marže</span><b data-live="k-margin">'+(c.rev>0?pc(c.margin):'—')+'</b></div></div></section>';
+  h+='<section class="sec"><div class="sec-h"><h2>Náklady</h2></div><div class="panel">'+stackBar([{k:'ing',l:'Suroviny',v:c.ing},{k:'staff',l:'Mzdy',v:c.staff},{k:'other',l:'Nájem a ostatní',v:c.other},{k:'fee',l:'Poplatek terminálu ('+pc(state.settings.feePct)+')',v:c.fee}],true)+'</div></section>';
+  // sales
+  h+='<section class="sec"><div class="sec-h"><h2>Prodeje</h2><button class="btn primary sm" type="button" data-act="open-import">Import ze SumUpu</button></div><div class="list">';
+  if(!c.rows.length)h+='<div class="item"><small>Nejdřív přidej drinky v záložce Drinky.</small></div>';
+  c.rows.forEach(function(r){
+    var d=r.d;
+    h+='<div class="sale"><div class="sale-top"><i class="dot" style="background:'+esc(d.color)+'"></i><div class="grow"><b>'+esc(d.name)+(d.active?'':' <span class="pill">archiv</span>')+'</b><small>'+kc(d.price)+' · náklad '+kc(r.unitCost,2)+'</small></div>'+
+      '<div class="stepper"><button type="button" data-act="step" data-dir="-1" aria-label="Méně">−</button><input inputmode="numeric" data-f="qty" data-d="'+d.id+'" value="'+(r.qty||'')+'" placeholder="0" aria-label="Počet: '+esc(d.name)+'"><button type="button" data-act="step" data-dir="1" aria-label="Více">+</button></div></div>'+
+      '<div class="sale-sum" data-live="r-'+d.id+'">'+saleSum(r)+'</div></div>';
+  });
+  h+='<div class="srow" style="grid-template-columns:1fr 130px;align-items:center"><div class="grow"><b>Ostatní tržba</b><small>Prodej bez rozpisu na drinky</small></div><input class="in" inputmode="decimal" data-f="other-rev" value="'+numStr(e.otherRev||e.otherRevenue)+'" placeholder="0" aria-label="Ostatní tržba"></div>';
+  h+='<div class="foot"><span>Prodáno celkem</span><span class="num"><span data-live="units">'+nf0.format(c.units)+'</span>'+NB+'ks</span></div></div>';
+  h+='<p class="hint">Náklad drinku se u akce zafixuje při prvním zadání prodeje. Pozdější změny cen minulé akce nezmění. <button class="btn ghost sm" type="button" data-act="recalc-costs">Přepočítat podle aktuálních cen</button></p></section>';
+  // staff
+  h+='<section class="sec"><div class="sec-h"><h2>Zaměstnanci</h2><button class="btn sm" type="button" data-act="add-staff">+ Přidat</button></div><div class="list">';
+  if(!e.staff.length)h+='<div class="item"><small>Zatím nikdo. Přidej barmany a výpomoc s hodinami a sazbou.</small></div>';
+  e.staff.forEach(function(s){
+    h+='<div class="srow"><input class="in" data-f="staff-name" data-id="'+s.id+'" value="'+esc(s.name)+'" placeholder="Jméno" aria-label="Jméno"><button class="btn ghost sm" type="button" data-act="del-staff" data-id="'+s.id+'" aria-label="Odebrat">✕</button>'+
+      '<div class="sub2"><label>Hodin <input class="in" inputmode="decimal" data-f="staff-hours" data-id="'+s.id+'" value="'+numStr(s.hours)+'"></label><label>Kč/h <input class="in" inputmode="decimal" data-f="staff-rate" data-id="'+s.id+'" value="'+numStr(s.rate)+'"></label><b data-live="ss-'+s.id+'">'+kc((s.hours||0)*(s.rate||0))+'</b></div></div>';
+  });
+  h+='<div class="foot"><span>Mzdy celkem</span><span class="num" data-live="st-total">'+kc(c.staff)+'</span></div></div></section>';
+  // costs
+  h+='<section class="sec"><div class="sec-h"><h2>Nájem a další náklady</h2><button class="btn sm" type="button" data-act="add-cost">+ Přidat</button></div><div class="list">';
+  if(!e.costs.length)h+='<div class="item"><small>Přidej nájem baru, dopravu, led, zboží navíc.</small></div>';
+  e.costs.forEach(function(x){
+    h+='<div class="crow"><input class="in" data-f="cost-label" data-id="'+x.id+'" value="'+esc(x.label)+'" placeholder="Název" aria-label="Název nákladu"><input class="in" inputmode="decimal" data-f="cost-amount" data-id="'+x.id+'" value="'+numStr(x.amount)+'" placeholder="0" aria-label="Částka"><button class="btn ghost sm" type="button" data-act="del-cost" data-id="'+x.id+'" aria-label="Odebrat">✕</button></div>';
+  });
+  h+='<div class="foot"><span>Celkem</span><span class="num" data-live="co-total">'+kc(c.other)+'</span></div></div></section>';
+  // plan
+  h+='<section class="sec"><div class="sec-h"><h2>Plán nákupu</h2></div><div class="panel"><div class="grid2"><div class="field"><label for="planTotal">Očekávaný počet drinků</label><input class="in" id="planTotal" inputmode="numeric" data-f="plan-total" value="'+(e.planTotal||'')+'" placeholder="např. 600"></div><div class="field"><label>&nbsp;</label><button class="btn" type="button" data-act="plan-split">Rozdělit podle historie</button></div></div><div class="plan-grid">'+
+    state.drinks.filter(function(d){return d.active}).map(function(d){return '<label class="pg"><span><i class="dot" style="background:'+esc(d.color)+'"></i>'+esc(d.name)+'</span><input class="in" inputmode="numeric" data-f="plan-qty" data-d="'+d.id+'" value="'+(e.plan[d.id]||'')+'" placeholder="0"></label>'}).join('')+
+    '</div><div id="shopList">'+shopHtml(e)+'</div></div></section>';
+  h+='<section class="sec"><div class="actions"><button class="btn" type="button" data-act="export-event">Export akce (CSV)</button><button class="btn" type="button" data-act="dup-event">Duplikovat akci</button><button class="btn danger" type="button" data-act="del-event" data-confirm="Opravdu smazat?">Smazat akci</button></div></section>';
+  return h;
+}
+
+function drinkItem(d,m){
+  var cost=drinkCost(d,m),share=d.price>0?cost/d.price*100:0,cls=costClass(share);
+  return '<button class="item" type="button" data-act="edit-drink" data-id="'+d.id+'"><i class="dot" style="background:'+esc(d.color)+';width:14px;height:14px"></i><div class="grow"><div class="t">'+esc(d.name)+'</div><small>Náklad '+kc(cost,2)+' · '+d.items.length+' '+plural(d.items.length,'surovina','suroviny','surovin')+'</small></div><div class="r"><b>'+kc(d.price)+'</b><span class="pill '+cls+'">náklad '+pc(share)+'</span></div></button>';
+}
+function renderDrinks(){
+  var m=ingMap(),act=state.drinks.filter(function(d){return d.active}),arch=state.drinks.filter(function(d){return !d.active});
+  var h=pageHead('Drinky','Receptury a cena za porci','<button class="btn primary sm" type="button" data-act="new-drink">+ Nový drink</button>');
+  if(!state.drinks.length)return h+'<div class="empty"><p>Přidej drinky z menu (třeba těch 6). U každého zadej suroviny a mililitry, appka spočítá náklad i marži.</p><button class="btn primary" type="button" data-act="new-drink">+ Nový drink</button></div>';
+  h+='<div class="list">'+act.map(function(d){return drinkItem(d,m)}).join('')+'</div>';
+  h+='<p class="hint">Barva štítku u nákladu: zelená do '+pc(state.settings.targetPct)+' ceny, oranžová do '+pc(state.settings.targetPct+8)+', červená nad tím. Cíl změníš v Více › Parametry.</p>';
+  if(arch.length)h+='<section class="sec"><div class="sec-h"><h2>Archiv</h2></div><div class="list">'+arch.map(function(d){return drinkItem(d,m)}).join('')+'</div></section>';
+  return h;
+}
+function renderIngs(){
+  var h=pageHead('Suroviny','Nákupní ceny a spotřeba','<button class="btn primary sm" type="button" data-act="new-ing">+ Surovina</button>');
+  if(!state.ingredients.length)return h+'<div class="empty"><p>Přidej suroviny s velikostí balení a cenou. Z toho se počítá cena za ml, g nebo kus.</p><button class="btn primary" type="button" data-act="new-ing">+ Surovina</button></div>';
+  var cats=['Alkohol','Mix','Ostatní'];
+  cats.forEach(function(cat){
+    var list=state.ingredients.filter(function(i){return (i.cat||'Ostatní')===cat}).sort(function(a,b){return a.name.localeCompare(b.name,'cs')});
+    if(!list.length)return;
+    h+='<section class="sec"><div class="list"><div class="group-h">'+cat+'</div>'+list.map(function(i){
+      var used=state.drinks.filter(function(d){return d.items.some(function(it){return it.ing===i.id})}).length,up=unitPrice(i);
+      return '<button class="item" type="button" data-act="edit-ing" data-id="'+i.id+'"><div class="grow"><div class="t">'+esc(i.name)+'</div><small>'+nf0.format(i.pack)+NB+esc(i.unit)+' za '+kc(i.price)+(used?' · v '+used+' '+plural(used,'drinku','drincích','drincích'):' · nepoužito')+'</small></div><div class="r"><b>'+(up<1?kc(up,2):kc(up,2))+'</b><small>za '+esc(i.unit)+'</small></div></button>';
+    }).join('')+'</div></section>';
+  });
+  return h;
+}
+function setField(label,key,hint,suffix){
+  return '<div class="field"><label for="set-'+key+'">'+label+'</label><input class="in" id="set-'+key+'" inputmode="decimal" data-f="set:'+key+'" value="'+numStr(state.settings[key])+'">'+(hint?'<small>'+hint+'</small>':'')+'</div>';
+}
+function renderMore(){
+  var demo=state.events.some(function(e){return e.demo});
+  var h=pageHead('Více','Nastavení, SumUp a data');
+  h+='<section class="sec"><div class="sec-h"><h2>Parametry</h2></div><div class="panel">'+
+    setField('Poplatek terminálu (%)','feePct','Procento z tržby, které si bere SumUp. Uprav podle své smlouvy.')+
+    setField('Rezerva při nákupu (%)','reservePct','Přidá se k vypočtené spotřebě, ať nedojde zásoba.')+
+    setField('Výchozí hodinová sazba (Kč)','defaultRate','Předvyplní se u nových zaměstnanců.')+
+    setField('Cílový podíl nákladů na drink (%)','targetPct','Podle něj se barví štítky u drinků a počítá doporučená cena.')+
+    setField('Počáteční investice (Kč)','investment','Vybavení, terminál, shakery. Přehled ukáže, kdy se vrátí.')+'</div></section>';
+  h+='<section class="sec"><div class="sec-h"><h2>Jak na SumUp</h2></div><div class="panel"><p>1. V SumUpu si pro 6 drinků vytvoř položky ve stejných názvech, jaké máš tady. Prodeje se pak dají třídit podle drinku.</p><p>2. Po akci v SumUp dashboardu stáhni export prodejů nebo transakcí za dobu akce jako CSV.</p><p>3. V detailu akce klepni na <b>Import ze SumUpu</b>, nahraj soubor a zkontroluj přiřazení sloupců a drinků. Příště si názvy pamatuju.</p><p class="hint">Aplikace nemůže zapisovat do terminálu. Prodej se vždy zadává v SumUpu, tady se data jen načítají.</p></div></section>';
+  h+='<section class="sec"><div class="sec-h"><h2>Data</h2></div><div class="panel"><p class="hint">'+(dbDoc?'Data se ukládají do cloudu u této aplikace a sdílejí se s lidmi, kteří ji smějí upravovat. Kopie je i v tomto prohlížeči.':'Data jsou jen v tomto prohlížeči. Dělej si zálohy do JSON.')+'</p><div class="actions"><button class="btn" type="button" data-act="export-all">Všechny akce (CSV)</button><button class="btn" type="button" data-act="export-json">Záloha (JSON)</button><button class="btn" type="button" data-act="restore">Obnovit ze zálohy</button></div>'+
+    (demo?'<button class="btn" type="button" data-act="del-demo" data-confirm="Opravdu smazat?">Smazat ukázkové akce</button>':'')+
+    '<button class="btn danger" type="button" data-act="wipe-all" data-confirm="Smazat úplně vše?">Smazat všechna data</button></div></section>';
+  return h;
+}
+
+function render(reset){
+  var y=window.scrollY||0;
+  var h;
+  if(view.tab==='dash')h=renderDash();else if(view.tab==='events')h=view.eventId?renderEvent(view.eventId):renderEvents();else if(view.tab==='drinks')h=renderDrinks();else if(view.tab==='ings')h=renderIngs();else h=renderMore();
+  $('#app').innerHTML=h;
+  $('#tabs').innerHTML=TABS.map(function(t){return '<button class="tab" type="button" data-act="tab" data-tab="'+t[0]+'"'+(view.tab===t[0]?' aria-current="page"':'')+'><svg viewBox="0 0 24 24" aria-hidden="true">'+ICONS[t[0]]+'</svg>'+t[1]+'</button>'}).join('');
+  persistView();
+  try{window.scrollTo(0,reset?0:y)}catch(e){}
+}
+function curEvent(){return view.tab==='events'&&view.eventId?state.events.find(function(e){return e.id===view.eventId}):null}
+
+function liveUpdate(){
+  var e=curEvent();if(!e)return;
+  var c=calc(e);
+  function set(k,t,n){$$('[data-live="'+k+'"]').forEach(function(el){el.textContent=t;if(el.hasAttribute('data-signed'))el.classList.toggle('neg',n<0)})}
+  set('k-rev',kc(c.rev));set('k-cost',kc(c.cost));set('k-profit',kc(c.profit),c.profit);set('k-margin',c.rev>0?pc(c.margin):'—');
+  set('b-ing',kc(c.ing));set('b-staff',kc(c.staff));set('b-other',kc(c.other));set('b-fee',kc(c.fee));
+  set('st-total',kc(c.staff));set('co-total',kc(c.other));set('units',nf0.format(c.units));
+  var tot=(c.ing+c.staff+c.other+c.fee)||1;
+  [['ing',c.ing],['staff',c.staff],['other',c.other],['fee',c.fee]].forEach(function(p){$$('[data-w="'+p[0]+'"]').forEach(function(el){el.style.width=(Math.max(0,p[1])/tot*100).toFixed(1)+'%'})});
+  c.rows.forEach(function(r){set('r-'+r.d.id,saleSum(r))});
+  e.staff.forEach(function(s){set('ss-'+s.id,kc((s.hours||0)*(s.rate||0)))});
+}
+function refreshPlan(){var e=curEvent(),el=$('#shopList');if(e&&el)el.innerHTML=shopHtml(e)}
+
+/* ================= toast + sheet ================= */
+var toastT=null;
+function toast(t){var el=$('#toast');el.textContent=t;el.hidden=false;clearTimeout(toastT);toastT=setTimeout(function(){el.hidden=true},2600)}
+function openSheet(s){sheet=s;$('#sheet').hidden=false;renderSheet(true)}
+function closeSheet(){sheet=null;imp=null;$('#sheet').hidden=true;$('#sheetBody').innerHTML='';$('#sheetFoot').innerHTML=''}
+function btn(label,act,cls,extra){return '<button class="btn '+(cls||'')+'" type="button" data-act="'+act+'" '+(extra||'')+'>'+label+'</button>'}
+
+function ingOptions(sel){
+  var order={'Alkohol':0,'Mix':1,'Ostatní':2};
+  var list=state.ingredients.slice().sort(function(a,b){return (order[a.cat]||0)-(order[b.cat]||0)||a.name.localeCompare(b.name,'cs')});
+  return '<option value="">— vyber surovinu —</option>'+list.map(function(i){return '<option value="'+i.id+'"'+(i.id===sel?' selected':'')+'>'+esc(i.name)+' ('+esc(i.unit)+')</option>'}).join('');
+}
+function unitOf(id){var i=state.ingredients.find(function(x){return x.id===id});return i?i.unit:''}
+function rowCost(it){var i=state.ingredients.find(function(x){return x.id===it.ing});return (it.amt||0)*unitPrice(i)}
+function drinkPrevHtml(d){
+  var cost=d.items.reduce(function(s,it){return s+rowCost(it)},0),price=d.price||0,share=price>0?cost/price*100:0,t=state.settings.targetPct;
+  var rec=t>0&&cost>0?Math.ceil(cost/(t/100)/5)*5:0;
+  return '<div><span class="lab">Náklad na porci</span><b>'+kc(cost,2)+'</b></div><div><span class="lab">Hrubý zisk</span><b>'+kc(price-cost,2)+'</b></div><div><span class="lab">Podíl nákladů</span><b><span class="pill '+costClass(share)+'">'+(price>0?pc(share):'—')+'</span></b></div><div><span class="lab">Cena pro '+pc(t)+' nákladů</span><b>'+(rec?kc(rec):'—')+'</b></div>';
+}
+function ingPrevText(i){
+  var up=i.pack>0?i.price/i.pack:0;
+  return up>0?'= '+kc(up,2)+' za '+(i.unit||'jednotku')+(i.unit==='ml'?' · 4 cl vyjde na '+kc(up*40,2):''):'Zadej velikost balení a cenu.';
+}
+
+function renderSheet(fresh){
+  if(!sheet)return;
+  var body=$('#sheetBody'),foot=$('#sheetFoot'),st=body.scrollTop,t='',b='',f='';
+  if(sheet.type==='drink'){
+    var d=sheet.draft;t=d.id?'Upravit drink':'Nový drink';
+    b='<div class="field"><label for="dName">Název</label><input class="in" id="dName" data-sf="name" value="'+esc(d.name)+'" placeholder="např. Mojito"></div>'+
+      '<div class="field"><label for="dPrice">Prodejní cena (Kč)</label><input class="in" id="dPrice" inputmode="decimal" data-sf="price" value="'+numStr(d.price)+'" placeholder="0"></div>'+
+      '<div class="field"><span class="lab">Barva štítku</span><div class="swatches">'+DRINK_COLORS.map(function(c){return '<button type="button" class="sw" style="background:'+c+'" data-act="d-color" data-c="'+c+'" aria-pressed="'+(d.color===c)+'" aria-label="Barva"></button>'}).join('')+'</div></div>'+
+      '<div class="field"><span class="lab">Suroviny na 1 porci</span><div>'+d.items.map(function(it,i){
+        return '<div class="irow"><select class="in" data-sf="row-ing" data-i="'+i+'" aria-label="Surovina">'+ingOptions(it.ing)+'</select><button class="btn ghost sm" type="button" data-act="d-del-row" data-i="'+i+'" aria-label="Odebrat">✕</button><div class="amt"><input class="in" inputmode="decimal" data-sf="row-amt" data-i="'+i+'" value="'+numStr(it.amt)+'" placeholder="0" aria-label="Množství"><span class="u" id="du'+i+'">'+esc(unitOf(it.ing))+'</span><span class="cst" id="dc'+i+'">'+kc(rowCost(it),2)+'</span></div></div>';
+      }).join('')+'</div><button class="btn sm" type="button" data-act="d-add-row" style="align-self:flex-start">+ Přidat surovinu</button></div>'+
+      '<div class="prev" id="dPrev">'+drinkPrevHtml(d)+'</div>';
+    f=(d.id?btn('Smazat','del-drink','danger','data-confirm="Opravdu smazat?"'):btn('Zrušit','close-sheet'))+btn('Uložit drink','save-drink','primary');
+  }else if(sheet.type==='ing'){
+    var i=sheet.draft;t=i.id?'Upravit surovinu':'Nová surovina';
+    b='<div class="field"><label for="iName">Název</label><input class="in" id="iName" data-sf="i-name" value="'+esc(i.name)+'" placeholder="např. Rum bílý"></div>'+
+      '<div class="grid2"><div class="field"><label for="iCat">Skupina</label><select class="in" id="iCat" data-sf="i-cat">'+['Alkohol','Mix','Ostatní'].map(function(c){return '<option'+(i.cat===c?' selected':'')+'>'+c+'</option>'}).join('')+'</select></div><div class="field"><label for="iUnit">Jednotka</label><select class="in" id="iUnit" data-sf="i-unit">'+['ml','g','ks'].map(function(c){return '<option'+(i.unit===c?' selected':'')+'>'+c+'</option>'}).join('')+'</select></div></div>'+
+      '<div class="grid2"><div class="field"><label for="iPack">Velikost balení</label><input class="in" id="iPack" inputmode="decimal" data-sf="i-pack" value="'+numStr(i.pack)+'" placeholder="700"></div><div class="field"><label for="iPrice">Cena balení (Kč)</label><input class="in" id="iPrice" inputmode="decimal" data-sf="i-price" value="'+numStr(i.price)+'" placeholder="0"></div></div>'+
+      '<div class="prev" id="iPrev" style="grid-template-columns:1fr"><div><b style="font-size:16px">'+esc(ingPrevText(i))+'</b></div></div>';
+    f=(i.id?btn('Smazat','del-ing','danger','data-confirm="Opravdu smazat?"'):btn('Zrušit','close-sheet'))+btn('Uložit surovinu','save-ing','primary');
+  }else if(sheet.type==='event'){
+    var v=sheet.draft;t=v.id?'Údaje o akci':'Nová akce';
+    b='<div class="field"><label for="eName">Název akce</label><input class="in" id="eName" data-sf="e-name" value="'+esc(v.name)+'" placeholder="např. Maturitní ples SPŠE"></div>'+
+      '<div class="grid2"><div class="field"><label for="eDate">Datum</label><input class="in" id="eDate" type="date" data-sf="e-date" value="'+esc(v.date)+'"></div><div class="field"><label for="ePlace">Místo</label><input class="in" id="ePlace" data-sf="e-place" value="'+esc(v.place)+'"></div></div>'+
+      '<div class="field"><label for="eNote">Poznámka</label><textarea class="in" id="eNote" data-sf="e-note" rows="3">'+esc(v.note)+'</textarea></div>';
+    f=btn('Zrušit','close-sheet')+btn('Uložit','save-event','primary');
+  }else if(sheet.type==='import'){
+    t='Import ze SumUpu';b=importBody();f=importFoot();
+  }else if(sheet.type==='restore'){
+    t='Obnovit ze zálohy';
+    b='<p class="hint">Obnovení nahradí všechna současná data. Nahraj soubor zálohy (JSON) nebo vlož jeho obsah.</p><label class="btn block" style="cursor:pointer">Vybrat soubor<input type="file" id="restFile" accept=".json,application/json,.txt" hidden></label><div class="field"><label for="restText">Nebo vlož obsah zálohy</label><textarea class="in" id="restText" rows="6" data-sf="rest-text">'+esc(sheet.text||'')+'</textarea></div>';
+    f=btn('Zrušit','close-sheet')+btn('Obnovit','restore-apply','primary');
+  }else if(sheet.type==='info'){
+    t=sheet.title;
+    b='<p class="hint">'+esc(sheet.hint||'')+'</p><textarea class="in" id="infoText" rows="10" readonly>'+esc(sheet.text||'')+'</textarea>';
+    f=btn('Zavřít','close-sheet')+btn('Kopírovat','copy-text','primary');
+  }
+  $('#sheetTitle').textContent=t;body.innerHTML=b;foot.innerHTML=f;
+  body.scrollTop=fresh?0:st;
+}
+
+/* ================= import (SumUp CSV) ================= */
+function parseCSV(text){
+  text=String(text).replace(/^﻿/,'');
+  var first=text.split(/\r?\n/)[0]||'';
+  var delim=[';',',','\t'].map(function(d){return [d,first.split(d).length-1]}).sort(function(a,b){return b[1]-a[1]})[0][0];
+  var rows=[],row=[],cur='',q=false;
+  for(var i=0;i<text.length;i++){
+    var c=text[i];
+    if(q){if(c==='"'){if(text[i+1]==='"'){cur+='"';i++}else q=false}else cur+=c}
+    else if(c==='"')q=true;
+    else if(c===delim){row.push(cur);cur=''}
+    else if(c==='\n'){row.push(cur);rows.push(row);row=[];cur=''}
+    else if(c==='\r'){}
+    else cur+=c;
+  }
+  if(cur!==''||row.length){row.push(cur);rows.push(row)}
+  return rows.filter(function(r){return r.some(function(x){return String(x).trim()!==''})});
+}
+function hasWord(h,k){return k.length<=3?h.split(' ').indexOf(k)>-1:h.indexOf(k)>-1}
+function guessCol(header,keys){
+  var hn=header.map(norm);
+  for(var k=0;k<keys.length;k++)for(var i=0;i<hn.length;i++)if(hn[i]&&hasWord(hn[i],keys[k]))return i;
+  return -1;
+}
+function startImport(rows,name){
+  var header=rows[0].map(function(x){return String(x).trim()});
+  imp={name:name||'',header:header,rows:rows.slice(1),amode:'line',map:{},mode:'replace',addUn:true,
+    cols:{
+      item:guessCol(header,['popis','description','polozka','item','nazev','produkt','product','name','zbozi']),
+      qty:guessCol(header,['mnozstvi','pocet','quantity','qty','ks']),
+      amount:guessCol(header,['celkem','total','castka','amount','gross','brutto','cena','price']),
+      status:guessCol(header,['stav','status'])
+    }};
+}
+function aggregate(){
+  var out={},skipped=0,I=imp;
+  I.rows.forEach(function(r){
+    if(I.cols.status>-1&&/refund|vrac|storn|fail|neuspes|zamit|declin|cancel/.test(norm(r[I.cols.status]))){skipped++;return}
+    var qty=I.cols.qty>-1?parseNum(r[I.cols.qty]):1;if(!isFinite(qty)||qty<=0)qty=1;
+    var amt=I.cols.amount>-1?parseNum(r[I.cols.amount]):0;if(!isFinite(amt))amt=0;
+    if(I.amode==='unit')amt*=qty;
+    var name=I.cols.item>-1?String(r[I.cols.item]||'').trim():'';
+    var key=norm(name)||'(bez nazvu)';
+    var o=out[key]||(out[key]={key:key,name:name||'(bez názvu)',qty:0,amount:0});
+    o.qty+=qty;o.amount+=amt;
+  });
+  return {items:Object.keys(out).map(function(k){return out[k]}).sort(function(a,b){return b.amount-a.amount}),skipped:skipped};
+}
+function defaultMap(key){
+  var saved=state.settings.importMap[key];
+  if(saved&&state.drinks.some(function(d){return d.id===saved}))return saved;
+  var best='';
+  state.drinks.forEach(function(d){var dn=norm(d.name);if(dn&&key&&(key.indexOf(dn)>-1||dn.indexOf(key)>-1)&&!best)best=d.id});
+  return best;
+}
+function importBody(){
+  if(!imp)return '';
+  if(!imp.header){ // step A
+    return '<p class="hint">V SumUp dashboardu stáhni export prodejů za dobu akce (CSV) a nahraj ho. Soubor se zpracuje jen v tvém prohlížeči.</p><label class="btn primary block" style="cursor:pointer">Vybrat CSV soubor<input type="file" id="impFile" accept=".csv,.txt,text/csv" hidden></label><div class="field"><label for="impText">Nebo vlož obsah CSV</label><textarea class="in" id="impText" rows="6" placeholder="Datum;Popis;Množství;Částka..."></textarea></div><p class="hint" id="impErr"></p>';
+  }
+  var I=imp,A=aggregate();
+  function colSel(k,label,opt){
+    return '<div class="field"><label for="ic-'+k+'">'+label+'</label><select class="in" id="ic-'+k+'" data-sf="imp-col" data-k="'+k+'"><option value="-1">'+(opt||'— žádný —')+'</option>'+I.header.map(function(h,i){return '<option value="'+i+'"'+(I.cols[k]===i?' selected':'')+'>'+esc(h||('Sloupec '+(i+1)))+'</option>'}).join('')+'</select></div>';
+  }
+  var h='<p class="hint">Soubor: <b>'+esc(I.name||'vložený text')+'</b> · '+I.rows.length+' '+plural(I.rows.length,'řádek','řádky','řádků')+'. <button class="btn ghost sm" type="button" data-act="imp-reset">Změnit</button></p>';
+  h+='<div class="grid2">'+colSel('item','Sloupec s drinkem')+colSel('qty','Sloupec s množstvím','— každý řádek = 1 ks')+'</div>';
+  h+='<div class="grid2">'+colSel('amount','Sloupec s částkou')+'<div class="field"><label for="ic-amode">Částka je</label><select class="in" id="ic-amode" data-sf="imp-amode"><option value="line"'+(I.amode==='line'?' selected':'')+'>za celý řádek</option><option value="unit"'+(I.amode==='unit'?' selected':'')+'>za 1 kus</option></select></div></div>';
+  h+=colSel('status','Sloupec se stavem platby (volitelné)');
+  var asg=0,asgAmt=0,unAmt=0,unQty=0;
+  h+='<div class="field"><span class="lab">Přiřaď položky k drinkům</span><div>';
+  A.items.forEach(function(it){
+    if(I.map[it.key]===undefined)I.map[it.key]=defaultMap(it.key);
+    var m=I.map[it.key];
+    if(m){asg+=it.qty;asgAmt+=it.amount}else{unAmt+=it.amount;unQty+=it.qty}
+    h+='<div class="map-row"><div><b>'+esc(it.name)+'</b><br><small>'+nf0.format(it.qty)+NB+'ks · '+kc(it.amount)+'</small></div><select class="in" data-sf="imp-map" data-key="'+esc(it.key)+'" aria-label="Drink pro '+esc(it.name)+'"><option value="">Nepřiřazovat</option>'+state.drinks.filter(function(d){return d.active}).map(function(d){return '<option value="'+d.id+'"'+(m===d.id?' selected':'')+'>'+esc(d.name)+'</option>'}).join('')+'</select></div>';
+  });
+  if(!A.items.length)h+='<p class="hint">V souboru jsem nenašel žádné řádky. Zkontroluj výběr sloupců.</p>';
+  h+='</div></div>';
+  h+='<div class="prev"><div><span class="lab">Přiřazeno</span><b>'+nf0.format(asg)+NB+'ks</b></div><div><span class="lab">Tržba přiřazená</span><b>'+kc(asgAmt)+'</b></div><div><span class="lab">Nepřiřazeno</span><b>'+kc(unAmt)+'</b></div><div><span class="lab">Přeskočeno plateb</span><b>'+A.skipped+'</b></div></div>';
+  h+='<label class="check"><input type="checkbox" data-sf="imp-un"'+(I.addUn?' checked':'')+'><span>Nepřiřazenou tržbu přidat jako „Ostatní tržba“</span></label>';
+  h+='<div class="field"><span class="lab">Co udělat s dosavadními prodeji akce</span><label class="check"><input type="radio" name="impmode" data-sf="imp-mode" value="replace"'+(I.mode==='replace'?' checked':'')+'><span>Nahradit je importem</span></label><label class="check"><input type="radio" name="impmode" data-sf="imp-mode" value="add"'+(I.mode==='add'?' checked':'')+'><span>Přičíst import k nim</span></label></div>';
+  return h;
+}
+function importFoot(){
+  if(!imp)return '';
+  if(!imp.header)return btn('Zrušit','close-sheet')+btn('Zpracovat vložený text','imp-parse','primary');
+  return btn('Zrušit','close-sheet')+btn('Použít u akce','imp-apply','primary');
+}
+function applyImport(){
+  var e=curEvent();if(!e||!imp)return;
+  var A=aggregate(),agg={},un=0;
+  A.items.forEach(function(it){
+    var did=imp.map[it.key];
+    if(did){var a=agg[did]||(agg[did]={qty:0,revenue:0});a.qty+=it.qty;a.revenue+=it.amount;state.settings.importMap[it.key]=did}
+    else un+=it.amount;
+  });
+  var m=ingMap(),old=e.sales;
+  if(imp.mode==='replace')e.sales={};
+  Object.keys(agg).forEach(function(did){
+    var d=state.drinks.find(function(x){return x.id===did});if(!d)return;
+    var s=e.sales[did]||(e.sales[did]={qty:0,revenue:0,unitCost:(old[did]&&old[did].unitCost!=null&&imp.mode==='add')?old[did].unitCost:drinkCost(d,m)});
+    s.qty=Math.round((s.qty+agg[did].qty)*100)/100;s.revenue=round2(s.revenue+agg[did].revenue);
+  });
+  if(imp.addUn&&un>0)e.otherRevenue=round2((imp.mode==='add'?(e.otherRevenue||0):0)+un);
+  else if(imp.mode==='replace'&&!imp.addUn)e.otherRevenue=e.otherRevenue||0;
+  touch();closeSheet();render();toast('Import hotový');
+}
+function readFileText(file){
+  return file.arrayBuffer().then(function(buf){
+    try{return new TextDecoder('utf-8',{fatal:true}).decode(buf)}
+    catch(e){try{return new TextDecoder('windows-1250').decode(buf)}catch(e2){return new TextDecoder().decode(buf)}}
+  });
+}
+
+/* ================= export ================= */
+function csvCell(v){var s=String(v==null?'':v);return /[";\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
+function csvNum(n){return String(round2(n)).replace('.',',')}
+function toCSV(rows){return '﻿'+rows.map(function(r){return r.map(csvCell).join(';')}).join('\r\n')}
+function eventCSV(e){
+  var c=calc(e),r=[['Akce',e.name],['Datum',fdate(e.date)],['Místo',e.place],[],['Drink','Počet','Tržba (Kč)','Náklad na kus (Kč)','Hrubý zisk (Kč)']];
+  c.rows.forEach(function(x){r.push([x.d.name,x.qty,csvNum(x.revenue),csvNum(x.unitCost),csvNum(x.profit)])});
+  if(c.otherRev)r.push(['Ostatní tržba','',csvNum(c.otherRev)]);
+  r.push([],['Zaměstnanec','Hodin','Sazba (Kč/h)','Mzda (Kč)']);
+  e.staff.forEach(function(s){r.push([s.name,csvNum(s.hours||0),csvNum(s.rate||0),csvNum((s.hours||0)*(s.rate||0))])});
+  r.push([],['Náklad','Částka (Kč)']);
+  e.costs.forEach(function(x){r.push([x.label,csvNum(x.amount||0)])});
+  r.push(['Poplatek terminálu',csvNum(c.fee)],[],['Tržba',csvNum(c.rev)],['Náklady celkem',csvNum(c.cost)],['Čistý zisk',csvNum(c.profit)],['Marže (%)',csvNum(c.margin)]);
+  return toCSV(r);
+}
+function allCSV(){
+  var act=state.drinks.filter(function(d){return d.active});
+  var r=[['Datum','Akce','Místo','Tržba','Suroviny','Mzdy','Nájem a ostatní','Poplatek terminálu','Čistý zisk','Marže (%)','Drinků celkem'].concat(act.map(function(d){return d.name+' (ks)'}))];
+  state.events.slice().sort(function(a,b){return a.date<b.date?-1:1}).forEach(function(e){
+    var c=calc(e);
+    r.push([fdate(e.date),e.name,e.place,csvNum(c.rev),csvNum(c.ing),csvNum(c.staff),csvNum(c.other),csvNum(c.fee),csvNum(c.profit),csvNum(c.margin),c.units].concat(act.map(function(d){return (e.sales[d.id]&&e.sales[d.id].qty)||0})));
+  });
+  return toCSV(r);
+}
+function exportFile(filename,text){
+  var p=(window.claude&&typeof window.claude.use==='function')?window.claude.use('downloads'):Promise.resolve(null);
+  p.catch(function(){return null}).then(function(dl){
+    if(dl){
+      return dl.save({filename:filename,data:text}).then(function(){toast('Soubor je připravený')}).catch(function(err){
+        if(err&&err.code==='declined')return;
+        fallbackExport(filename,text);
+      });
+    }
+    fallbackExport(filename,text);
+  });
+}
+function fallbackExport(filename,text){openSheet({type:'info',title:filename,hint:'Stažení souboru tady není dostupné. Zkopíruj obsah a ulož ho do souboru '+filename+'.',text:text})}
+function slug(s){return norm(s).replace(/ /g,'-')||'akce'}
+
+/* ================= actions ================= */
+function go(tab,eventId){view={tab:tab,eventId:eventId||null};render(true)}
+function newEventDraft(){return {id:'',name:'',date:todayStr(),place:'',note:''}}
+function armBtn(t){
+  t.dataset.orig=t.innerHTML;t.innerHTML=esc(t.dataset.confirm);t.classList.add('armed');
+  setTimeout(function(){if(t.classList.contains('armed')){t.classList.remove('armed');t.innerHTML=t.dataset.orig}},3500);
+}
+
+function onClick(ev){
+  var t=ev.target.closest('[data-act]');if(!t)return;
+  if(t.dataset.confirm&&!t.classList.contains('armed')){armBtn(t);return}
+  var act=t.dataset.act,e=curEvent(),id=t.dataset.id;
+  switch(act){
+    case 'tab':go(t.dataset.tab);break;
+    case 'goto-events':go('events');break;
+    case 'open-event':go('events',id);break;
+    case 'back':go('events');break;
+    case 'sync-info':toast(SYNC_TXT[syncState][1]);break;
+    case 'close-sheet':closeSheet();break;
+    case 'new-event':openSheet({type:'event',draft:newEventDraft()});break;
+    case 'edit-event':if(e)openSheet({type:'event',draft:{id:e.id,name:e.name,date:e.date,place:e.place||'',note:e.note||''}});break;
+    case 'save-event':{
+      var d=sheet.draft;if(!d.name.trim()){toast('Doplň název akce');break}
+      if(d.id){var x=state.events.find(function(z){return z.id===d.id});x.name=d.name.trim();x.date=d.date||todayStr();x.place=d.place.trim();x.note=d.note.trim();touch();closeSheet();render()}
+      else{var n={id:uid(),name:d.name.trim(),date:d.date||todayStr(),place:d.place.trim(),note:d.note.trim(),staff:[],costs:[{id:uid(),label:'Nájem baru',amount:0}],sales:{},otherRevenue:0,plan:{},planTotal:0};state.events.push(n);touch();closeSheet();go('events',n.id)}
+      break}
+    case 'del-event':if(e){state.events=state.events.filter(function(z){return z.id!==e.id});touch();go('events');toast('Akce smazána')}break;
+    case 'dup-event':if(e){
+      var cp={id:uid(),name:e.name+' (kopie)',date:todayStr(),place:e.place||'',note:'',staff:e.staff.map(function(s){return Object.assign({},s,{id:uid()})}),costs:e.costs.map(function(s){return Object.assign({},s,{id:uid()})}),sales:{},otherRevenue:0,plan:Object.assign({},e.plan),planTotal:e.planTotal};
+      state.events.push(cp);touch();go('events',cp.id);toast('Akce zduplikována, uprav datum');}break;
+    case 'export-event':if(e)exportFile('akce-'+slug(e.name)+'-'+e.date+'.csv',eventCSV(e));break;
+    case 'export-all':exportFile('plesovy-bar-akce-'+todayStr()+'.csv',allCSV());break;
+    case 'export-json':exportFile('plesovy-bar-zaloha-'+todayStr()+'.json',JSON.stringify(state,null,1));break;
+    case 'restore':openSheet({type:'restore',text:''});break;
+    case 'restore-apply':{
+      try{var o=JSON.parse(sheet.text||'');if(!o||!Array.isArray(o.events)||!Array.isArray(o.drinks))throw new Error('x');state=normalize(o);touch();closeSheet();render(true);toast('Záloha obnovena')}
+      catch(err){toast('Tohle není platná záloha')}
+      break}
+    case 'step':{
+      var inp=t.parentElement.querySelector('input'),v=Math.max(0,(parseNum(inp.value)||0)+(+t.dataset.dir));
+      inp.value=v?String(v):'';inp.dispatchEvent(new Event('input',{bubbles:true}));break}
+    case 'add-staff':if(e){e.staff.push({id:uid(),name:'',hours:6,rate:state.settings.defaultRate});touch();render()}break;
+    case 'del-staff':if(e){e.staff=e.staff.filter(function(s){return s.id!==id});touch();render()}break;
+    case 'add-cost':if(e){e.costs.push({id:uid(),label:'',amount:0});touch();render()}break;
+    case 'del-cost':if(e){e.costs=e.costs.filter(function(s){return s.id!==id});touch();render()}break;
+    case 'recalc-costs':if(e){var m=ingMap();Object.keys(e.sales).forEach(function(k){var dd=state.drinks.find(function(z){return z.id===k});if(dd)e.sales[k].unitCost=drinkCost(dd,m)});touch();render();toast('Náklady přepočítány')}break;
+    case 'plan-split':if(e){
+      var total=Math.round(e.planTotal||0);if(!total){toast('Nejdřív zadej očekávaný počet drinků');break}
+      var sh=historyShares(e.id);e.plan={};Object.keys(sh).forEach(function(k){var q=Math.round(total*sh[k]);if(q)e.plan[k]=q});touch();render();toast('Rozděleno podle historie')}break;
+    case 'open-import':if(e){imp={name:'',header:null,rows:[],cols:{},map:{},mode:'replace',addUn:true,amode:'line'};openSheet({type:'import'})}break;
+    case 'imp-reset':imp={name:'',header:null,rows:[],cols:{},map:{},mode:'replace',addUn:true,amode:'line'};renderSheet(true);break;
+    case 'imp-parse':{
+      var ta=$('#impText');var txt=ta?ta.value:'';var rows=parseCSV(txt);
+      if(rows.length<2){var er=$('#impErr');if(er)er.textContent='Vložený text vypadá prázdně nebo bez řádků s daty.';break}
+      startImport(rows,'');renderSheet(true);break}
+    case 'imp-apply':applyImport();break;
+    case 'del-demo':state.events=state.events.filter(function(z){return !z.demo});touch();render();toast('Ukázkové akce smazány');break;
+    case 'wipe-all':state=emptyState();touch();go('dash');toast('Všechna data smazána');break;
+    case 'new-drink':openSheet({type:'drink',draft:{id:'',name:'',price:0,color:DRINK_COLORS[state.drinks.length%DRINK_COLORS.length],items:[{ing:'',amt:0}]}});break;
+    case 'edit-drink':{var dd=state.drinks.find(function(z){return z.id===id});if(dd)openSheet({type:'drink',draft:JSON.parse(JSON.stringify(dd))});break}
+    case 'd-color':sheet.draft.color=t.dataset.c;renderSheet();break;
+    case 'd-add-row':sheet.draft.items.push({ing:'',amt:0});renderSheet();break;
+    case 'd-del-row':sheet.draft.items.splice(+t.dataset.i,1);renderSheet();break;
+    case 'save-drink':{
+      var dr=sheet.draft;if(!dr.name.trim()){toast('Doplň název drinku');break}
+      var items=dr.items.filter(function(it){return it.ing&&it.amt>0});
+      if(dr.id){var o2=state.drinks.find(function(z){return z.id===dr.id});o2.name=dr.name.trim();o2.price=dr.price||0;o2.color=dr.color;o2.items=items}
+      else state.drinks.push({id:uid(),name:dr.name.trim(),price:dr.price||0,color:dr.color,active:true,items:items});
+      touch();closeSheet();render();break}
+    case 'del-drink':{
+      var did=sheet.draft.id,dx=state.drinks.find(function(z){return z.id===did});
+      var inUse=state.events.some(function(z){return z.sales[did]});
+      if(inUse){dx.active=!dx.active;toast(dx.active?'Drink obnoven':'Drink je v historii akcí, přesunul jsem ho do archivu')}
+      else{state.drinks=state.drinks.filter(function(z){return z.id!==did});toast('Drink smazán')}
+      touch();closeSheet();render();break}
+    case 'new-ing':openSheet({type:'ing',draft:{id:'',name:'',cat:'Alkohol',unit:'ml',pack:700,price:0}});break;
+    case 'edit-ing':{var ii=state.ingredients.find(function(z){return z.id===id});if(ii)openSheet({type:'ing',draft:Object.assign({},ii)});break}
+    case 'save-ing':{
+      var ig=sheet.draft;if(!ig.name.trim()){toast('Doplň název suroviny');break}
+      if(!(ig.pack>0)){toast('Velikost balení musí být větší než 0');break}
+      if(ig.id){var o3=state.ingredients.find(function(z){return z.id===ig.id});Object.assign(o3,{name:ig.name.trim(),cat:ig.cat,unit:ig.unit,pack:ig.pack,price:ig.price||0})}
+      else state.ingredients.push({id:uid(),name:ig.name.trim(),cat:ig.cat,unit:ig.unit,pack:ig.pack,price:ig.price||0});
+      touch();closeSheet();render();break}
+    case 'del-ing':{
+      var gid=sheet.draft.id,using=state.drinks.filter(function(z){return z.items.some(function(it){return it.ing===gid})});
+      if(using.length){toast('Používá se v: '+using.map(function(z){return z.name}).join(', '));break}
+      state.ingredients=state.ingredients.filter(function(z){return z.id!==gid});touch();closeSheet();render();toast('Surovina smazána');break}
+    case 'copy-text':{
+      var ta2=$('#infoText');
+      var done=function(){toast('Zkopírováno')};
+      var fb=function(){ta2.focus();ta2.select();toast('Označeno, zkopíruj ručně')};
+      if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(ta2.value).then(done).catch(fb)}else fb();
+      break}
+  }
+}
+
+function isTextual(el){return (el.tagName==='INPUT'&&['checkbox','radio','file'].indexOf(el.type)<0&&el.type!=='date')||el.tagName==='TEXTAREA'}
+function onInput(ev){
+  var el=ev.target;
+  if(ev.type==='change'&&isTextual(el))return;
+  if(ev.type==='input'&&!isTextual(el)&&el.type!=='date')return;
+  if(el.closest('#sheet'))return sheetInput(el);
+  var f=el.dataset.f;if(!f)return;
+  if(f.indexOf('set:')===0){
+    var k=f.slice(4);state.settings[k]=Math.max(0,num(el));touch();return;
+  }
+  var e=curEvent();if(!e)return;
+  var id=el.dataset.id,x;
+  switch(f){
+    case 'qty':{
+      var dd=state.drinks.find(function(z){return z.id===el.dataset.d});if(!dd)return;
+      var n=Math.max(0,Math.round(num(el))),s=e.sales[dd.id]||{qty:0,revenue:0};
+      var avg=s.qty>0?s.revenue/s.qty:dd.price;
+      if(!n){delete e.sales[dd.id]}
+      else{e.sales[dd.id]={qty:n,revenue:round2(n*avg),unitCost:s.unitCost!=null?s.unitCost:drinkCost(dd)}}
+      break}
+    case 'other-rev':e.otherRevenue=Math.max(0,num(el));break;
+    case 'staff-name':x=e.staff.find(function(z){return z.id===id});if(x)x.name=el.value;break;
+    case 'staff-hours':x=e.staff.find(function(z){return z.id===id});if(x)x.hours=Math.max(0,num(el));break;
+    case 'staff-rate':x=e.staff.find(function(z){return z.id===id});if(x)x.rate=Math.max(0,num(el));break;
+    case 'cost-label':x=e.costs.find(function(z){return z.id===id});if(x)x.label=el.value;break;
+    case 'cost-amount':x=e.costs.find(function(z){return z.id===id});if(x)x.amount=Math.max(0,num(el));break;
+    case 'plan-total':e.planTotal=Math.max(0,Math.round(num(el)));break;
+    case 'plan-qty':{var q=Math.max(0,Math.round(num(el)));if(q)e.plan[el.dataset.d]=q;else delete e.plan[el.dataset.d];break}
+    default:return;
+  }
+  touch();liveUpdate();
+  if(f==='plan-qty'||f==='plan-total')refreshPlan();
+}
+function sheetInput(el){
+  if(!sheet)return;
+  if(el.id==='impFile'){
+    var file=el.files&&el.files[0];if(!file)return;
+    readFileText(file).then(function(txt){
+      var rows=parseCSV(txt);
+      if(rows.length<2){var er=$('#impErr');if(er)er.textContent='V souboru nejsou žádné řádky s daty.';return}
+      startImport(rows,file.name);renderSheet(true);
+    }).catch(function(){var er=$('#impErr');if(er)er.textContent='Soubor se nepodařilo přečíst.'});
+    return;
+  }
+  if(el.id==='restFile'){
+    var f2=el.files&&el.files[0];if(!f2)return;
+    readFileText(f2).then(function(txt){sheet.text=txt;renderSheet()}).catch(function(){toast('Soubor se nepodařilo přečíst')});
+    return;
+  }
+  var f=el.dataset.sf;if(!f)return;
+  var d=sheet.draft;
+  if(sheet.type==='drink'){
+    if(f==='name')d.name=el.value;
+    else if(f==='price')d.price=num(el);
+    else if(f==='row-ing'){var i=+el.dataset.i;d.items[i].ing=el.value;var u=$('#du'+i);if(u)u.textContent=unitOf(el.value);var c=$('#dc'+i);if(c)c.textContent=kc(rowCost(d.items[i]),2)}
+    else if(f==='row-amt'){var j=+el.dataset.i;d.items[j].amt=num(el);var c2=$('#dc'+j);if(c2)c2.textContent=kc(rowCost(d.items[j]),2)}
+    var pv=$('#dPrev');if(pv)pv.innerHTML=drinkPrevHtml(d);
+  }else if(sheet.type==='ing'){
+    if(f==='i-name')d.name=el.value;else if(f==='i-cat')d.cat=el.value;else if(f==='i-unit')d.unit=el.value;
+    else if(f==='i-pack')d.pack=num(el);else if(f==='i-price')d.price=num(el);
+    var ip=$('#iPrev');if(ip)ip.innerHTML='<div><b style="font-size:16px">'+esc(ingPrevText(d))+'</b></div>';
+  }else if(sheet.type==='event'){
+    if(f==='e-name')d.name=el.value;else if(f==='e-date')d.date=el.value;else if(f==='e-place')d.place=el.value;else if(f==='e-note')d.note=el.value;
+  }else if(sheet.type==='restore'){
+    if(f==='rest-text')sheet.text=el.value;
+  }else if(sheet.type==='import'&&imp&&imp.header){
+    if(f==='imp-col'){imp.cols[el.dataset.k]=parseInt(el.value,10);if(el.dataset.k==='item')imp.map={}}
+    else if(f==='imp-amode')imp.amode=el.value;
+    else if(f==='imp-map')imp.map[el.dataset.key]=el.value;
+    else if(f==='imp-un')imp.addUn=el.checked;
+    else if(f==='imp-mode')imp.mode=el.value;
+    renderSheet();
+  }
+}
+
+/* ================= init ================= */
+state=loadLocal();
+var firstRun=false;
+if(!state){state=seed();firstRun=true}
+loadView();
+if(view.eventId&&!state.events.some(function(e){return e.id===view.eventId}))view.eventId=null;
+document.addEventListener('click',onClick);
+document.addEventListener('input',onInput);
+document.addEventListener('change',onInput);
+document.addEventListener('keydown',function(ev){if(ev.key==='Escape'&&sheet)closeSheet()});
+setSync('local');
+render(true);
+initDb();
+})();
+</script>
+
+</body></html>
