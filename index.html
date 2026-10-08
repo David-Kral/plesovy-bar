@@ -222,11 +222,24 @@ button.item:disabled{opacity:.6}
   .tab{flex-direction:row;justify-content:flex-start;gap:12px;min-height:44px;padding:0 14px;font-size:15px;border-radius:12px}
   .tab:hover{background:var(--surface-2)}
   .tab[aria-current=page]{background:var(--accent-soft)}
-  main{margin:0 0 0 216px;max-width:1224px;padding:26px 28px 60px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:26px 28px;align-items:start}
+  main{margin:0 auto 0 216px;max-width:1560px;padding:26px 32px 60px;display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:28px 32px;align-items:start}
   main>.page-h,main>.hero,main>.note,main>.crumb,main>.empty,main>.hint,main>.list,main>.sec.wide{grid-column:1/-1}
   .sheet{border-radius:20px}
   .sheet-wrap{align-items:center}
+  .list.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:12px;background:none;border:0;border-radius:0;overflow:visible}
+  .list.cards .item{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}
+  .list.cards .item:first-child{border-top:1px solid var(--line)}
+  .page-h h1{font-size:34px}
+  .cols{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px 32px;align-items:start}
+  .cols>div{display:flex;flex-direction:column;gap:28px;min-width:0}
+  main>.sec:last-child{grid-column:1/-1}
+  main>.hero .stats.cols2{grid-template-columns:repeat(4,1fr)}
+  main>.hero .stats.cols2 .stat:nth-child(3){padding-left:14px;border-left:1px dashed var(--line)}
 }
+@media (max-width:999px){.cols,.cols>div{display:contents}}
+@media (min-width:1700px){html{zoom:1.15}}
+@media (min-width:2100px){html{zoom:1.3}}
+@media (min-width:2600px){html{zoom:1.6}}
 .kbd{display:inline-block;min-width:22px;padding:1px 6px;border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;background:var(--surface);font:600 12px var(--font-body);text-align:center}
 .seg{display:flex;gap:8px;flex-wrap:wrap}
 .seg .btn[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
@@ -933,7 +946,16 @@ function renderEvent(id){
     state.drinks.filter(function(d){return d.active}).map(function(d){return '<label class="pg"><span><i class="dot" style="background:'+esc(d.color)+'"></i>'+esc(d.name)+'</span><input class="in" inputmode="numeric" data-f="plan-qty" data-d="'+d.id+'" value="'+(e.plan[d.id]||'')+'" placeholder="0"></label>'}).join('')+
     '</div><div id="shopList">'+shopHtml(e)+'</div></div></section>';
   h+='<section class="sec"><div class="actions"><button class="btn" type="button" data-act="export-event">Export akce (CSV)</button><button class="btn" type="button" data-act="print">Tisk / PDF</button><button class="btn" type="button" data-act="dup-event">Duplikovat akci</button><button class="btn danger" type="button" data-act="del-event" data-confirm="Opravdu smazat?">Smazat akci</button></div></section>';
-  return h;
+  return splitCols(h);
+}
+function splitCols(h){
+  var parts=h.split('<section class="sec"'),head=parts.shift(),L=[],R=[],B='';
+  var left=['Prodeje','Zaměstnanci','Nájem a další náklady','Plán nákupu'];
+  parts.forEach(function(p,i){
+    var m=p.match(/<h2>([^<]*)<\/h2>/),html='<section class="sec" style="order:'+i+'"'+p;
+    if(!m)B+=html;else if(left.indexOf(m[1])>-1)L.push(html);else R.push(html);
+  });
+  return head+'<div class="cols"><div>'+L.join('')+'</div><div>'+R.join('')+'</div></div>'+B;
 }
 
 function drinkItem(d,m){
@@ -944,9 +966,9 @@ function renderDrinks(){
   var m=ingMap(),act=state.drinks.filter(function(d){return d.active}),arch=state.drinks.filter(function(d){return !d.active});
   var h=pageHead('Drinky','Receptury a cena za porci','<button class="btn primary sm" type="button" data-act="new-drink">+ Nový drink</button>');
   if(!state.drinks.length)return h+'<div class="empty"><p>Přidej drinky z menu (třeba těch 6). U každého zadej suroviny a mililitry, appka spočítá náklad i marži.</p><button class="btn primary" type="button" data-act="new-drink">+ Nový drink</button></div>';
-  h+='<div class="list">'+act.map(function(d){return drinkItem(d,m)}).join('')+'</div>';
+  h+='<div class="list cards">'+act.map(function(d){return drinkItem(d,m)}).join('')+'</div>';
   h+='<p class="hint">Barva štítku u nákladu: zelená do '+pc(state.settings.targetPct)+' ceny, oranžová do '+pc(state.settings.targetPct+8)+', červená nad tím. Cíl změníš v Více › Parametry.</p>';
-  if(arch.length)h+='<section class="sec"><div class="sec-h"><h2>Archiv</h2></div><div class="list">'+arch.map(function(d){return drinkItem(d,m)}).join('')+'</div></section>';
+  if(arch.length)h+='<section class="sec wide"><div class="sec-h"><h2>Archiv</h2></div><div class="list cards">'+arch.map(function(d){return drinkItem(d,m)}).join('')+'</div></section>';
   return h;
 }
 
@@ -1634,6 +1656,7 @@ function boot(){setSync('local');render(true);initDb()}
 if(LOGIN_REQUIRED)gate(boot);else boot();
 })();
 </script>
+
 
 
 
