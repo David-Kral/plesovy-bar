@@ -1570,6 +1570,7 @@ function browserDownload(filename,text){
 state=loadLocal();
 var firstRun=false,needInit=false;
 if(state&&INIT_ENC&&state.events.some(function(e){return e.demo})&&!state.events.some(function(e){return !e.demo}))state=null;
+if(state&&INIT_ENC&&state.drinks.some(function(d){return d.id==='laguna05l'&&!(d.fixedCost>0)}))state=null;
 if(!state){if(INIT_ENC){state=emptyState();needInit=true}else{state=seed();firstRun=true}}
 loadView();
 if(view.eventId&&!state.events.some(function(e){return e.id===view.eventId}))view.eventId=null;
@@ -1581,5 +1582,7 @@ function boot(){setSync('local');render(true);initDb()}
 if(LOGIN_REQUIRED)gate(boot);else boot();
 })();
 </script>
+
+
 
 </html>
