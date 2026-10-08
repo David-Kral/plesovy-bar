@@ -273,9 +273,9 @@ function norm(s){return String(s==null?'':s).toLowerCase().normalize('NFD').repl
 /* ================= state ================= */
 var LS_KEY='plesovy-bar-v1', LS_VIEW='plesovy-bar-view';
 var DRINK_COLORS=['#E8772E','#58A55C','#8A5A3C','#8FC7D4','#F2C14E','#B6D36B','#D6567A','#7B61D6'];
-var DEFAULT_SETTINGS={feePct:1.5,reservePct:10,defaultRate:150,targetPct:30,investment:12000,importMap:{}};
+var DEFAULT_SETTINGS={feePct:1.5,reservePct:10,defaultRate:150,targetPct:30,investment:12000,importMap:{},partners:['David','Vojta']};
 
-function emptyState(){return {v:1,settings:JSON.parse(JSON.stringify(DEFAULT_SETTINGS)),ingredients:[],drinks:[],events:[],team:[]}}
+function emptyState(){return {v:1,settings:JSON.parse(JSON.stringify(DEFAULT_SETTINGS)),ingredients:[],drinks:[],events:[],team:[],purchases:[]}}
 
 function seed(){
   function ing(id,name,cat,unit,pack,price){return {id:id,name:name,cat:cat,unit:unit,pack:pack,price:price}}
@@ -325,6 +325,8 @@ function normalize(s){
   if(!d.settings.importMap||typeof d.settings.importMap!=='object')d.settings.importMap={};
   d.ingredients=(Array.isArray(s.ingredients)?s.ingredients:[]).map(function(i){i.stock=isFinite(i.stock)?i.stock:0;i.min=isFinite(i.min)?i.min:0;return i});
   d.team=Array.isArray(s.team)?s.team:[];
+  d.purchases=(Array.isArray(s.purchases)?s.purchases:[]).map(function(x){x.amount=isFinite(x.amount)?x.amount:0;x.payer=x.payer||'both';x.name=x.name||'Nákup';return x});
+  if(!Array.isArray(d.settings.partners)||d.settings.partners.length<2)d.settings.partners=['David','Vojta'];
   d.drinks=(Array.isArray(s.drinks)?s.drinks:[]).map(function(x){x.items=Array.isArray(x.items)?x.items:[];if(x.active==null)x.active=true;if(!x.color)x.color=DRINK_COLORS[0];return x});
   d.events=(Array.isArray(s.events)?s.events:[]).map(function(e){e.staff=(Array.isArray(e.staff)?e.staff:[]).map(function(x){if(x.paid==null)x.paid=false;if(!x.memberId)x.memberId='';return x});e.costs=Array.isArray(e.costs)?e.costs:[];e.sales=e.sales&&typeof e.sales==='object'?e.sales:{};e.plan=e.plan&&typeof e.plan==='object'?e.plan:{};e.otherRevenue=e.otherRevenue||0;e.planTotal=e.planTotal||0;return e});
   return d;
@@ -334,8 +336,8 @@ var state=null, localRev=0, view={tab:'dash',eventId:null}, sheet=null, imp=null
 var syncState='local', saveTimer=null;
 var cloud={db:null,user:null,uid:'',ready:false,waiting:false,flushing:false,again:false,flushP:null,silent:false,known:{},snaps:{},got:{}};
 var perm={write:true,admin:true,owner:false,name:'',role:''};
-var COLLS=['ingredients','drinks','events','team'];
-var KIND_ACC={events:'akci',ingredients:'surovinu',drinks:'drink',team:'člena týmu',settings:'parametry'};
+var COLLS=['ingredients','drinks','events','team','purchases'];
+var KIND_ACC={events:'akci',ingredients:'surovinu',drinks:'drink',team:'člena týmu',purchases:'nákup',settings:'parametry'};
 var myLog=[], allLogs={}, names={}, logDirty=false, logWriting=false, oCounter=Date.now();
 
 function loadLocal(){
@@ -362,7 +364,7 @@ function sj(v){
   if(Array.isArray(v))return '['+v.map(sj).join(',')+']';
   return '{'+Object.keys(v).filter(function(k){return v[k]!==undefined}).sort().map(function(k){return JSON.stringify(k)+':'+sj(v[k])}).join(',')+'}';
 }
-var NAV_ACTS={tab:1,'goto-sklad':1,'goto-team':1,'goto-events':1,'open-event':1,back:1,'sync-info':1,'close-sheet':1,'copy-text':1,'export-event':1,'export-all':1,'export-stock':1,'export-team':1,'export-json':1,'edit-ing':1,'edit-drink':1,'edit-member':1,'edit-event':1};
+var NAV_ACTS={tab:1,'goto-sklad':1,'goto-team':1,'goto-events':1,'open-event':1,back:1,'sync-info':1,'close-sheet':1,'copy-text':1,'export-event':1,'export-all':1,'export-stock':1,'export-team':1,'export-json':1,'edit-ing':1,'edit-purchase':1,'edit-drink':1,'edit-member':1,'edit-event':1};
 var ADMIN_ACTS={'new-drink':1,'save-drink':1,'del-drink':1,'d-color':1,'d-add-row':1,'d-del-row':1,'new-member':1,'save-member':1,'del-member':1,'member-paid-all':1,'del-event':1,'wipe-all':1,'del-demo':1,restore:1,'restore-apply':1};
 function actOK(a){if(NAV_ACTS[a])return true;if(ADMIN_ACTS[a])return perm.admin;return perm.write}
 function lockUI(root){
@@ -401,6 +403,7 @@ function describe(coll,old,n){
     if(ch('items'))out.push('receptura');
     if(ch('name')||ch('color')||ch('active'))out.push('údaje');
   }else if(coll==='team'){out.push('údaje')}
+  else if(coll==='purchases'){out.push(nf0.format(n.amount||0)+' Kč, platil '+payerLabel(n.payer))}
   else if(coll==='settings'){
     var lb={feePct:'poplatek',reservePct:'rezerva',defaultRate:'sazba',targetPct:'cíl nákladů',investment:'investice',importMap:'přiřazení importu'};
     Object.keys(lb).forEach(function(k){if(ch(k))out.push(lb[k])});
@@ -473,7 +476,7 @@ function flush(){
 }
 function applyRemote(){
   if(!cloud.ready)return;
-  var docs=localDocs(),clean=[],next={ingredients:[],drinks:[],events:[],team:[]};
+  var docs=localDocs(),clean=[],next={ingredients:[],drinks:[],events:[],team:[],purchases:[]};
   COLLS.forEach(function(c){
     var rem=cloud.snaps[c]||{},seen={},out=next[c];
     Object.keys(rem).forEach(function(id){
@@ -493,7 +496,7 @@ function applyRemote(){
   var rs=cloud.snaps.settings&&cloud.snaps.settings.main,ks='settings/main',st=state.settings,cleanSet=false;
   var dirtySet=(ks in cloud.known)&&sj(state.settings)!==cloud.known[ks];
   if(!dirtySet){if(rs){st=rs;cleanSet=true}else if(!perm.admin)cleanSet=true}
-  state=normalize({settings:st,ingredients:next.ingredients,drinks:next.drinks,events:next.events,team:next.team});
+  state=normalize({settings:st,ingredients:next.ingredients,drinks:next.drinks,events:next.events,team:next.team,purchases:next.purchases});
   clean.forEach(function(c){cloud.known[c.k]=sj(c.o)});
   if(cleanSet)cloud.known[ks]=sj(state.settings);
   persistLocal();scheduleRender();
@@ -910,8 +913,37 @@ function renderDrinks(){
   if(arch.length)h+='<section class="sec"><div class="sec-h"><h2>Archiv</h2></div><div class="list">'+arch.map(function(d){return drinkItem(d,m)}).join('')+'</div></section>';
   return h;
 }
+
+/* ================= partners: who paid ================= */
+function partners(){return state.settings.partners||['David','Vojta']}
+function payerLabel(p){return p==='both'?'oba napůl':p}
+function purchStats(){
+  var ps=partners(),paid={},total=0;
+  ps.forEach(function(n){paid[n]=0});
+  state.purchases.forEach(function(x){
+    var a=x.amount||0;total+=a;
+    if(x.payer==='both'){ps.forEach(function(n){paid[n]+=a/ps.length})}
+    else if(x.payer in paid)paid[x.payer]+=a;
+    else paid[x.payer]=(paid[x.payer]||0)+a;
+  });
+  var fair=total/ps.length,bal={};
+  ps.forEach(function(n){bal[n]=paid[n]-fair});
+  return {ps:ps,paid:paid,total:total,fair:fair,bal:bal};
+}
+function purchHtml(){
+  var S=purchStats(),h='<section class="sec"><div class="sec-h"><h2>Nákupy a podíly</h2><button class="btn primary sm" type="button" data-act="new-purchase">+ Nákup</button></div>';
+  if(!state.purchases.length)return h+'<div class="panel"><p class="hint">Zapiš, kdo co koupil a platil (David, Vojta nebo napůl). Appka ukáže, kolik kdo do baru vložil a kdo komu kolik doplatí.</p></div></section>';
+  h+='<div class="panel"><div class="stats cols2">'+S.ps.map(function(n){return '<div class="stat"><span class="lab">'+esc(n)+' vložil</span><b>'+kc(S.paid[n])+'</b><small>'+pc(S.total>0?S.paid[n]/S.total*100:0)+' podíl</small></div>'}).join('')+'</div>';
+  var hi=S.ps.slice().sort(function(a,b){return S.bal[b]-S.bal[a]}),diff=S.bal[hi[0]];
+  h+='<div class="note"><span>'+(diff<0.5?'<b>Vyrovnáno.</b> Oba jste vložili stejně.':'<b>Vyrovnání: '+esc(hi[hi.length-1])+' → '+esc(hi[0])+', '+kc(diff)+'</b>. Pak má každý vloženo stejně ('+kc(S.fair)+').')+'</span></div></div>';
+  h+='<div class="list">'+state.purchases.slice().sort(function(a,b){return (a.date||'')<(b.date||'')?1:-1}).map(function(x){
+    return '<button class="item" type="button" data-act="edit-purchase" data-id="'+x.id+'"><div class="grow"><div class="t">'+esc(x.name)+'</div><small>'+fdate(x.date)+' · platil '+esc(payerLabel(x.payer))+'</small></div><div class="r"><b>'+kc(x.amount)+'</b></div></button>';
+  }).join('')+'<div class="foot"><span>Celkem nakoupeno</span><span class="num">'+kc(S.total)+'</span></div></div></section>';
+  return h;
+}
 function renderIngs(){
   var rl=restockList(),h=pageHead('Sklad','Zásoby, minima a nákupní ceny','<button class="btn primary sm" type="button" data-act="new-ing">+ Surovina</button>');
+  h+=purchHtml();
   if(!state.ingredients.length)return h+'<div class="empty"><p>Přidej suroviny s velikostí balení, cenou a stavem na skladě. Z toho se počítá cena za ml, g nebo kus i nákup.</p><button class="btn primary" type="button" data-act="new-ing">+ Surovina</button></div>';
   h+='<section class="hero"><div class="stats" style="grid-template-columns:1fr 1fr"><div class="stat"><span class="lab">Hodnota skladu</span><b>'+kc(stockValue())+'</b></div><div class="stat"><span class="lab">Pod minimem</span><b class="'+(rl.rows.length?'neg':'')+'">'+rl.rows.length+' '+plural(rl.rows.length,'položka','položky','položek')+'</b></div></div></section>';
   if(rl.rows.length){
@@ -1053,6 +1085,14 @@ function renderSheet(fresh){
       '<div class="grid2"><div class="field"><label for="iStock">Skladem ('+esc(i.unit)+')</label><input class="in" id="iStock" inputmode="decimal" data-sf="i-stock" value="'+numStr(i.stock)+'" placeholder="0"></div><div class="field"><label for="iMin">Minimum ('+esc(i.unit)+')</label><input class="in" id="iMin" inputmode="decimal" data-sf="i-min" value="'+numStr(i.min)+'" placeholder="0"></div></div>'+
       '<div class="field"><label for="iAdd">Naskladnit nákup (počet balení)</label><div style="display:flex;gap:8px"><input class="in" id="iAdd" inputmode="decimal" data-sf="i-addpacks" value="'+numStr(sheet.addPacks)+'" placeholder="např. 3"><button class="btn" type="button" data-act="i-restock">Přidat</button></div><small>Přičte balení ke stavu skladem. Pak ulož surovinu.</small></div>';
     f=(i.id?btn('Smazat','del-ing','danger','data-confirm="Opravdu smazat?"'):btn('Zrušit','close-sheet'))+btn('Uložit surovinu','save-ing','primary');
+  }else if(sheet.type==='purchase'){
+    var pu=sheet.draft;t=pu.id?'Nákup':'Nový nákup';
+    var popts=partners().map(function(n){return '<option value="'+esc(n)+'"'+(pu.payer===n?' selected':'')+'>'+esc(n)+'</option>'}).join('')+'<option value="both"'+(pu.payer==='both'?' selected':'')+'>Oba napůl (50/50)</option>';
+    b='<div class="field"><label for="pName">Co se koupilo</label><input class="in" id="pName" data-sf="p-name" value="'+esc(pu.name)+'" placeholder="např. Rum, led, kelímky"></div>'+
+      '<div class="grid2"><div class="field"><label for="pAmount">Cena celkem (Kč)</label><input class="in" id="pAmount" inputmode="decimal" data-sf="p-amount" value="'+numStr(pu.amount)+'"></div><div class="field"><label for="pDate">Datum</label><input class="in" id="pDate" type="date" data-sf="p-date" value="'+esc(pu.date)+'"></div></div>'+
+      '<div class="field"><label for="pPayer">Kdo platil</label><select class="in" id="pPayer" data-sf="p-payer">'+popts+'</select><small>Pokud platil jeden ze svého, vybereš jeho. Při společném nákupu zvol 50/50.</small></div>';
+    if(!pu.id)b+='<div class="grid2"><div class="field"><label for="pIng">Naskladnit surovinu (volitelné)</label><select class="in" id="pIng" data-sf="p-ing"><option value="">— nenaskladňovat —</option>'+state.ingredients.map(function(g){return '<option value="'+esc(g.id)+'"'+(pu.ingId===g.id?' selected':'')+'>'+esc(g.name)+'</option>'}).join('')+'</select></div><div class="field"><label for="pPacks">Počet balení</label><input class="in" id="pPacks" inputmode="decimal" data-sf="p-packs" value="'+numStr(pu.packs)+'"></div></div>';
+    f=(pu.id?btn('Smazat','del-purchase','danger','data-confirm="Opravdu smazat?"'):btn('Zrušit','close-sheet'))+btn('Uložit','save-purchase','primary');
   }else if(sheet.type==='member'){
     var mb=sheet.draft;t=mb.id?'Člen týmu':'Nový člen týmu';
     b='<div class="field"><label for="mName">Jméno</label><input class="in" id="mName" data-sf="m-name" value="'+esc(mb.name)+'" placeholder="např. Tomáš"></div>'+
@@ -1303,6 +1343,20 @@ function onClick(ev){
     case 'wipe-all':state=emptyState();touch();go('dash');toast('Všechna data smazána');break;
     case 'goto-sklad':go('ings');break;
     case 'goto-team':go('team');break;
+    case 'new-purchase':openSheet({type:'purchase',draft:{id:'',name:'',amount:0,date:todayStr(),payer:partners()[0],ingId:'',packs:0}});break;
+    case 'edit-purchase':{var pp=state.purchases.find(function(z){return z.id===id});if(pp)openSheet({type:'purchase',draft:Object.assign({},pp)});break}
+    case 'save-purchase':{
+      var pd=sheet.draft;if(!pd.name.trim()){toast('Doplň, co se koupilo');break}
+      if(!(pd.amount>0)){toast('Doplň cenu');break}
+      var pdata={name:pd.name.trim(),amount:pd.amount,date:pd.date||todayStr(),payer:pd.payer};
+      if(pd.id){Object.assign(state.purchases.find(function(z){return z.id===pd.id}),pdata)}
+      else{
+        state.purchases.push(Object.assign({id:uid()},pdata));
+        var pg=pd.ingId&&state.ingredients.find(function(z){return z.id===pd.ingId});
+        if(pg&&pd.packs>0)pg.stock=round2((pg.stock||0)+pd.packs*pg.pack);
+      }
+      touch();closeSheet();render();toast('Nákup uložen');break}
+    case 'del-purchase':state.purchases=state.purchases.filter(function(z){return z.id!==sheet.draft.id});touch();closeSheet();render();toast('Nákup smazán');break;
     case 'new-member':openSheet({type:'member',draft:{id:'',name:'',phone:'',rate:state.settings.defaultRate,note:''}});break;
     case 'edit-member':{var mm=state.team.find(function(z){return z.id===id});if(mm)openSheet({type:'member',draft:Object.assign({},mm)});break}
     case 'save-member':{
@@ -1451,6 +1505,8 @@ function sheetInput(el){
     else if(f==='i-min')d.min=num(el);
     else if(f==='i-addpacks')sheet.addPacks=num(el);
     var ip=$('#iPrev');if(ip)ip.innerHTML='<div><b style="font-size:16px">'+esc(ingPrevText(d))+'</b></div>';
+  }else if(sheet.type==='purchase'){
+    if(f==='p-name')d.name=el.value;else if(f==='p-amount')d.amount=num(el);else if(f==='p-date')d.date=el.value;else if(f==='p-payer')d.payer=el.value;else if(f==='p-ing')d.ingId=el.value;else if(f==='p-packs')d.packs=num(el);
   }else if(sheet.type==='member'){
     if(f==='m-name')d.name=el.value;else if(f==='m-rate')d.rate=num(el);else if(f==='m-phone')d.phone=el.value;else if(f==='m-note')d.note=el.value;
   }else if(sheet.type==='event'){
