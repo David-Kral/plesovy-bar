@@ -111,10 +111,10 @@ button.item:hover{background:var(--surface-2)}
 .hero{display:flex;flex-direction:column;gap:16px}
 .hero-num{font:700 clamp(40px,13vw,64px)/1 var(--font-display);letter-spacing:-.03em;font-variant-numeric:tabular-nums;margin-top:6px}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px dashed var(--line);padding-top:12px}
-.stats.s4{grid-template-columns:repeat(2,1fr);row-gap:14px}
+.stats.cols2{grid-template-columns:repeat(2,1fr);row-gap:14px}
 .stat{min-width:0}
 .stat+.stat{padding-left:14px;border-left:1px dashed var(--line)}
-.stats.s4 .stat:nth-child(3){padding-left:0;border-left:0}
+.stats.cols2 .stat:nth-child(3){padding-left:0;border-left:0}
 .stat b{display:block;font:650 20px/1.2 var(--font-display);font-variant-numeric:tabular-nums;margin-top:3px}
 .inv{display:flex;flex-direction:column;gap:8px}
 .inv-h{display:flex;justify-content:space-between;gap:10px;font-weight:600}
@@ -205,6 +205,9 @@ button.item:hover{background:var(--surface-2)}
 .tab[aria-current=page]{color:var(--accent)}
 .note.warn{background:var(--warn-soft)}
 .btn:disabled{opacity:.45;cursor:not-allowed}
+.login{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px}
+.login form{width:100%;max-width:340px;display:flex;flex-direction:column;gap:14px}
+.login h1{font-size:32px}
 .in:disabled{opacity:.7;background:var(--surface-2)}
 button.item:disabled{opacity:.6}
 .avatar{width:38px;height:38px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;font:700 16px var(--font-display);flex:none}
@@ -228,6 +231,7 @@ button.item:disabled{opacity:.6}
   </div>
 </div>
 <div class="toast" id="toast" hidden></div>
+<div class="login" id="login" hidden><form id="loginForm"><div><h1>Plesový bar</h1><p class="sub">Přihlas se</p></div><div class="field"><label for="lgUser">Uživatel</label><input class="in" id="lgUser" name="username" autocomplete="username" autocapitalize="none" autocorrect="off"></div><div class="field"><label for="lgPass">Heslo</label><input class="in" id="lgPass" name="password" type="password" autocomplete="current-password"></div><p class="neg" id="lgErr" hidden>Špatné jméno nebo heslo.</p><button class="btn primary block" type="submit">Přihlásit</button></form></div>
 
 <script>
 (function(){
@@ -714,6 +718,10 @@ function renderDash(){
   var T=totals(),pl=T.events,demo=state.events.some(function(e){return e.demo}),h='';
   h+=pageHead('Přehled',pl.length?pl.length+' '+plural(pl.length,'odehraná akce','odehrané akce','odehraných akcí')+' · '+nf0.format(T.units)+' prodaných drinků':'Zatím žádné odehrané akce');
   if(demo)h+='<div class="note"><span>Ukázková data. Ceny, drinky i akce jsou vymyšlené, aby šly hned zkusit grafy a výpočty.</span><button class="btn sm" type="button" data-act="del-demo" data-confirm="Opravdu smazat?">Smazat ukázkové akce</button></div>';
+  if(!cloud.db){
+    var lb=0;try{lb=+localStorage.getItem(LS_BACKUP)||0}catch(e){}
+    if(Date.now()-lb>7*864e5)h+='<div class="note"><span><b>Záloha:</b> data jsou jen v tomhle prohlížeči. Stáhni si je do počítače jako .json.</span><button class="btn sm" type="button" data-act="export-json">Stáhnout zálohu</button></div>';
+  }
   var lowN=state.ingredients.filter(function(i){return i.min>0&&(i.stock||0)<=i.min}),unp=allStaffTotals().unpaid;
   if(lowN.length)h+='<div class="note warn"><span><b>Sklad:</b> pod minimem '+lowN.length+' '+plural(lowN.length,'surovina','suroviny','surovin')+' ('+esc(lowN.slice(0,3).map(function(i){return i.name}).join(', '))+(lowN.length>3?'…':'')+')</span><button class="btn sm" type="button" data-act="goto-sklad">Otevřít sklad</button></div>';
   if(unp>0)h+='<div class="note warn"><span><b>Mzdy:</b> k vyplacení '+kc(unp)+'</span><button class="btn sm" type="button" data-act="goto-team">Otevřít tým</button></div>';
@@ -797,7 +805,7 @@ function renderEvent(id){
   var c=calc(e),h='';
   h+='<div class="crumb"><button class="btn ghost sm" type="button" data-act="back">‹ Všechny akce</button><button class="btn sm" type="button" data-act="edit-event">Upravit údaje</button></div>';
   h+=pageHead(e.name||'Akce',[fdate(e.date),esc(e.place||'')].filter(Boolean).join(' · ')+(e.note?'<br><small>'+esc(e.note)+'</small>':''));
-  h+='<section class="hero"><div class="stats s4">'+
+  h+='<section class="hero"><div class="stats cols2">'+
     '<div class="stat"><span class="lab">Tržba</span><b data-live="k-rev">'+kc(c.rev)+'</b></div>'+
     '<div class="stat"><span class="lab">Náklady</span><b data-live="k-cost">'+kc(c.cost)+'</b></div>'+
     '<div class="stat"><span class="lab">Čistý zisk</span><b data-live="k-profit" data-signed class="'+(c.profit<0?'neg':'')+'">'+kc(c.profit)+'</b></div>'+
@@ -914,10 +922,11 @@ function renderMore(){
     setField('Cílový podíl nákladů na drink (%)','targetPct','Podle něj se barví štítky u drinků a počítá doporučená cena.')+
     setField('Počáteční investice (Kč)','investment','Vybavení, terminál, shakery. Přehled ukáže, kdy se vrátí.')+'</div></section>';
   h+='<section class="sec"><div class="sec-h"><h2>Jak na SumUp</h2></div><div class="panel"><p>1. V SumUpu si pro 6 drinků vytvoř položky ve stejných názvech, jaké máš tady. Prodeje se pak dají třídit podle drinku.</p><p>2. Po akci v SumUp dashboardu stáhni export prodejů nebo transakcí za dobu akce jako CSV.</p><p>3. V detailu akce klepni na <b>Import ze SumUpu</b>, nahraj soubor a zkontroluj přiřazení sloupců a drinků. Příště si názvy pamatuju.</p><p class="hint">Aplikace nemůže zapisovat do terminálu. Prodej se vždy zadává v SumUpu, tady se data jen načítají.</p></div></section>';
-  h+='<section class="sec"><div class="sec-h"><h2>Data</h2></div><div class="panel"><p class="hint">'+(cloud.db?'Data se ukládají do cloudu u této aplikace a sdílejí se s lidmi, kteří ji smějí upravovat. Kopie je i v tomto prohlížeči.':'Data jsou jen v tomto prohlížeči. Dělej si zálohy do JSON.')+'</p><div class="actions"><button class="btn" type="button" data-act="export-all">Všechny akce (CSV)</button><button class="btn" type="button" data-act="export-stock">Sklad (CSV)</button><button class="btn" type="button" data-act="export-team">Tým (CSV)</button><button class="btn" type="button" data-act="export-json">Záloha (JSON)</button><button class="btn" type="button" data-act="restore">Obnovit ze zálohy</button></div>'+
+  h+='<section class="sec"><div class="sec-h"><h2>Data</h2></div><div class="panel"><p class="hint">'+(cloud.db?'Data se ukládají do cloudu u této aplikace a sdílejí se s lidmi, kteří ji smějí upravovat. Kopie je i v tomto prohlížeči.':'Data jsou jen v tomto prohlížeči. Záloha (JSON) se uloží do tvého počítače a obnovíš ji tlačítkem Obnovit ze zálohy.')+'</p><div class="actions"><button class="btn" type="button" data-act="export-all">Všechny akce (CSV)</button><button class="btn" type="button" data-act="export-stock">Sklad (CSV)</button><button class="btn" type="button" data-act="export-team">Tým (CSV)</button><button class="btn" type="button" data-act="export-json">Záloha (JSON)</button><button class="btn" type="button" data-act="restore">Obnovit ze zálohy</button></div>'+
     (demo?'<button class="btn" type="button" data-act="del-demo" data-confirm="Opravdu smazat?">Smazat ukázkové akce</button>':'')+
     '<button class="btn danger" type="button" data-act="wipe-all" data-confirm="Smazat úplně vše?">Smazat všechna data</button></div></section>';
   h+=historyHtml();
+  if(LOGIN_REQUIRED)h+='<section class="sec"><button class="btn" type="button" data-act="logout">Odhlásit se</button></section>';
   return h;
 }
 
@@ -1176,6 +1185,7 @@ function exportFile(filename,text){
         fallbackExport(filename,text);
       });
     }
+    if(LOGIN_REQUIRED&&browserDownload(filename,text)){toast('Soubor je stažený');return}
     fallbackExport(filename,text);
   });
 }
@@ -1215,7 +1225,8 @@ function onClick(ev){
       state.events.push(cp);touch();go('events',cp.id);toast('Akce zduplikována, uprav datum');}break;
     case 'export-event':if(e)exportFile('akce-'+slug(e.name)+'-'+e.date+'.csv',eventCSV(e));break;
     case 'export-all':exportFile('plesovy-bar-akce-'+todayStr()+'.csv',allCSV());break;
-    case 'export-json':exportFile('plesovy-bar-zaloha-'+todayStr()+'.json',JSON.stringify(state,null,1));break;
+    case 'logout':try{localStorage.removeItem(LS_AUTH)}catch(e){}location.reload();break;
+    case 'export-json':try{localStorage.setItem(LS_BACKUP,String(Date.now()))}catch(e){}exportFile('plesovy-bar-zaloha-'+todayStr()+'.json',JSON.stringify(state,null,1));break;
     case 'restore':openSheet({type:'restore',text:''});break;
     case 'restore-apply':{
       try{var o=JSON.parse(sheet.text||'');if(!o||!Array.isArray(o.events)||!Array.isArray(o.drinks))throw new Error('x');state=normalize(o);touch();closeSheet();render(true);toast('Záloha obnovena')}
@@ -1407,6 +1418,37 @@ function sheetInput(el){
   }
 }
 
+/* ================= login gate (jen veřejná verze) ================= */
+var LOGIN_REQUIRED=true;
+var AUTH_HASH='69143decedc4ce1e73e6d6d4cf706c3d35cb6da8791196eba59d11d85bae0d2a', LS_AUTH='plesovy-bar-auth', LS_BACKUP='plesovy-bar-backup';
+function sha256(t){
+  return crypto.subtle.digest('SHA-256',new TextEncoder().encode(t)).then(function(b){return Array.prototype.map.call(new Uint8Array(b),function(x){return ('0'+x.toString(16)).slice(-2)}).join('')});
+}
+function gate(done){
+  var ok=false;try{ok=localStorage.getItem(LS_AUTH)===AUTH_HASH}catch(e){}
+  if(ok){done();return}
+  var box=$('#login'),form=$('#loginForm'),err=$('#lgErr');
+  box.hidden=false;
+  form.addEventListener('submit',function(ev){
+    ev.preventDefault();
+    var u=$('#lgUser').value.trim().toLowerCase(),pw=$('#lgPass').value;
+    if(!(window.crypto&&crypto.subtle)){err.textContent='Tenhle prohlížeč přihlášení nepodporuje.';err.hidden=false;return}
+    sha256(u+':'+pw).then(function(h){
+      if(h===AUTH_HASH){try{localStorage.setItem(LS_AUTH,h)}catch(e){}err.hidden=true;box.hidden=true;$('#lgPass').value='';done()}
+      else{err.textContent='Špatné jméno nebo heslo.';err.hidden=false}
+    });
+  });
+}
+function browserDownload(filename,text){
+  try{
+    var blob=new Blob([text],{type:/\.json$/.test(filename)?'application/json':'text/csv;charset=utf-8'});
+    var url=URL.createObjectURL(blob),a=document.createElement('a');
+    a.href=url;a.download=filename;document.body.appendChild(a);a.click();
+    setTimeout(function(){URL.revokeObjectURL(url);a.remove()},1500);
+    return true;
+  }catch(e){return false}
+}
+
 /* ================= init ================= */
 state=loadLocal();
 var firstRun=false;
@@ -1417,9 +1459,8 @@ document.addEventListener('click',onClick);
 document.addEventListener('input',onInput);
 document.addEventListener('change',onInput);
 document.addEventListener('keydown',function(ev){if(ev.key==='Escape'&&sheet)closeSheet()});
-setSync('local');
-render(true);
-initDb();
+function boot(){setSync('local');render(true);initDb()}
+if(LOGIN_REQUIRED)gate(boot);else boot();
 })();
 </script>
 
