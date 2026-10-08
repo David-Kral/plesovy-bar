@@ -592,7 +592,7 @@ function initDb(){
 /* ================= calculations ================= */
 function ingMap(){var m={};state.ingredients.forEach(function(i){m[i.id]=i});return m}
 function unitPrice(i){return i&&i.pack>0?i.price/i.pack:0}
-function drinkCost(d,m){m=m||ingMap();return d.items.reduce(function(s,it){return s+(it.amt||0)*unitPrice(m[it.ing])},0)}
+function drinkCost(d,m){m=m||ingMap();var c=d.items.reduce(function(s,it){return s+(it.amt||0)*unitPrice(m[it.ing])},0);return c>0?c:(d.fixedCost>0?d.fixedCost:0)}
 function costClass(share){var t=state.settings.targetPct;return share<=t?'good':(share<=t+8?'warn':'bad')}
 
 function calc(e){
@@ -902,7 +902,7 @@ function renderEvent(id){
 
 function drinkItem(d,m){
   var cost=drinkCost(d,m),share=d.price>0?cost/d.price*100:0,cls=costClass(share);
-  return '<button class="item" type="button" data-act="edit-drink" data-id="'+d.id+'"><i class="dot" style="background:'+esc(d.color)+';width:14px;height:14px"></i><div class="grow"><div class="t">'+esc(d.name)+'</div><small>Náklad '+kc(cost,2)+' · '+d.items.length+' '+plural(d.items.length,'surovina','suroviny','surovin')+'</small></div><div class="r"><b>'+kc(d.price)+'</b><span class="pill '+cls+'">náklad '+pc(share)+'</span></div></button>';
+  return '<button class="item" type="button" data-act="edit-drink" data-id="'+d.id+'"><i class="dot" style="background:'+esc(d.color)+';width:14px;height:14px"></i><div class="grow"><div class="t">'+esc(d.name)+'</div><small>Náklad '+kc(cost,2)+' · '+(d.items.length?d.items.length+' '+plural(d.items.length,'surovina','suroviny','surovin'):'orientačně')+'</small></div><div class="r"><b>'+kc(d.price)+'</b><span class="pill '+cls+'">náklad '+pc(share)+'</span></div></button>';
 }
 function renderDrinks(){
   var m=ingMap(),act=state.drinks.filter(function(d){return d.active}),arch=state.drinks.filter(function(d){return !d.active});
@@ -1054,7 +1054,7 @@ function ingOptions(sel){
 function unitOf(id){var i=state.ingredients.find(function(x){return x.id===id});return i?i.unit:''}
 function rowCost(it){var i=state.ingredients.find(function(x){return x.id===it.ing});return (it.amt||0)*unitPrice(i)}
 function drinkPrevHtml(d){
-  var cost=d.items.reduce(function(s,it){return s+rowCost(it)},0),price=d.price||0,share=price>0?cost/price*100:0,t=state.settings.targetPct;
+  var cost=d.items.reduce(function(s,it){return s+rowCost(it)},0),price=d.price||0;if(!(cost>0)&&d.fixedCost>0)cost=d.fixedCost;var share=price>0?cost/price*100:0,t=state.settings.targetPct;
   var rec=t>0&&cost>0?Math.ceil(cost/(t/100)/5)*5:0;
   return '<div><span class="lab">Náklad na porci</span><b>'+kc(cost,2)+'</b></div><div><span class="lab">Hrubý zisk</span><b>'+kc(price-cost,2)+'</b></div><div><span class="lab">Podíl nákladů</span><b><span class="pill '+costClass(share)+'">'+(price>0?pc(share):'—')+'</span></b></div><div><span class="lab">Cena pro '+pc(t)+' nákladů</span><b>'+(rec?kc(rec):'—')+'</b></div>';
 }
@@ -1070,6 +1070,7 @@ function renderSheet(fresh){
     var d=sheet.draft;t=d.id?'Upravit drink':'Nový drink';
     b='<div class="field"><label for="dName">Název</label><input class="in" id="dName" data-sf="name" value="'+esc(d.name)+'" placeholder="např. Mojito"></div>'+
       '<div class="field"><label for="dPrice">Prodejní cena (Kč)</label><input class="in" id="dPrice" inputmode="decimal" data-sf="price" value="'+numStr(d.price)+'" placeholder="0"></div>'+
+      '<div class="field"><label for="dFixed">Orientační náklad na porci (Kč)</label><input class="in" id="dFixed" inputmode="decimal" data-sf="fixed-cost" value="'+numStr(d.fixedCost)+'" placeholder="0"><small>Použije se, dokud nezadáš suroviny a receptura.</small></div>'+
       '<div class="field"><span class="lab">Barva štítku</span><div class="swatches">'+DRINK_COLORS.map(function(c){return '<button type="button" class="sw" style="background:'+c+'" data-act="d-color" data-c="'+c+'" aria-pressed="'+(d.color===c)+'" aria-label="Barva"></button>'}).join('')+'</div></div>'+
       '<div class="field"><span class="lab">Suroviny na 1 porci</span><div>'+d.items.map(function(it,i){
         return '<div class="irow"><select class="in" data-sf="row-ing" data-i="'+i+'" aria-label="Surovina">'+ingOptions(it.ing)+'</select><button class="btn ghost sm" type="button" data-act="d-del-row" data-i="'+i+'" aria-label="Odebrat">✕</button><div class="amt"><input class="in" inputmode="decimal" data-sf="row-amt" data-i="'+i+'" value="'+numStr(it.amt)+'" placeholder="0" aria-label="Množství"><span class="u" id="du'+i+'">'+esc(unitOf(it.ing))+'</span><span class="cst" id="dc'+i+'">'+kc(rowCost(it),2)+'</span></div></div>';
@@ -1404,8 +1405,8 @@ function onClick(ev){
     case 'save-drink':{
       var dr=sheet.draft;if(!dr.name.trim()){toast('Doplň název drinku');break}
       var items=dr.items.filter(function(it){return it.ing&&it.amt>0});
-      if(dr.id){var o2=state.drinks.find(function(z){return z.id===dr.id});o2.name=dr.name.trim();o2.price=dr.price||0;o2.color=dr.color;o2.items=items}
-      else state.drinks.push({id:uid(),name:dr.name.trim(),price:dr.price||0,color:dr.color,active:true,items:items});
+      if(dr.id){var o2=state.drinks.find(function(z){return z.id===dr.id});o2.name=dr.name.trim();o2.price=dr.price||0;o2.fixedCost=dr.fixedCost||0;o2.color=dr.color;o2.items=items}
+      else state.drinks.push({id:uid(),name:dr.name.trim(),price:dr.price||0,fixedCost:dr.fixedCost||0,color:dr.color,active:true,items:items});
       touch();closeSheet();render();break}
     case 'del-drink':{
       var did=sheet.draft.id,dx=state.drinks.find(function(z){return z.id===did});
@@ -1495,6 +1496,7 @@ function sheetInput(el){
   if(sheet.type==='drink'){
     if(f==='name')d.name=el.value;
     else if(f==='price')d.price=num(el);
+    else if(f==='fixed-cost')d.fixedCost=num(el);
     else if(f==='row-ing'){var i=+el.dataset.i;d.items[i].ing=el.value;var u=$('#du'+i);if(u)u.textContent=unitOf(el.value);var c=$('#dc'+i);if(c)c.textContent=kc(rowCost(d.items[i]),2)}
     else if(f==='row-amt'){var j=+el.dataset.i;d.items[j].amt=num(el);var c2=$('#dc'+j);if(c2)c2.textContent=kc(rowCost(d.items[j]),2)}
     var pv=$('#dPrev');if(pv)pv.innerHTML=drinkPrevHtml(d);
