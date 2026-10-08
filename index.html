@@ -204,6 +204,9 @@ button.item:hover{background:var(--surface-2)}
 .tab svg{width:23px;height:23px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .tab[aria-current=page]{color:var(--accent)}
 .note.warn{background:var(--warn-soft)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.in:disabled{opacity:.7;background:var(--surface-2)}
+button.item:disabled{opacity:.6}
 .avatar{width:38px;height:38px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;font:700 16px var(--font-display);flex:none}
 .check.sm{font-size:13px;color:var(--muted);align-items:center;gap:6px}
 .check.sm input{width:18px;height:18px;margin:0}
@@ -324,7 +327,12 @@ function normalize(s){
 }
 
 var state=null, localRev=0, view={tab:'dash',eventId:null}, sheet=null, imp=null;
-var dbDoc=null, clientId=uid(), saveTimer=null, writing=false, pendingWrite=false, syncState='local';
+var syncState='local', saveTimer=null;
+var cloud={db:null,user:null,uid:'',ready:false,waiting:false,flushing:false,again:false,flushP:null,silent:false,known:{},snaps:{},got:{}};
+var perm={write:true,admin:true,owner:false,name:'',role:''};
+var COLLS=['ingredients','drinks','events','team'];
+var KIND_ACC={events:'akci',ingredients:'surovinu',drinks:'drink',team:'člena týmu',settings:'parametry'};
+var myLog=[], allLogs={}, names={}, logDirty=false, logWriting=false, oCounter=Date.now();
 
 function loadLocal(){
   try{var raw=localStorage.getItem(LS_KEY);if(raw){var o=JSON.parse(raw);if(o&&o.state){localRev=o.rev||0;return normalize(o.state)}}}catch(e){}
@@ -341,19 +349,158 @@ function setSync(s){
 }
 function touch(){
   localRev=Date.now();persistLocal();
-  setSync(dbDoc?'saving':'local');
-  clearTimeout(saveTimer);saveTimer=setTimeout(flush,700);
+  if(cloud.ready){setSync(perm.write?'saving':'readonly');clearTimeout(saveTimer);saveTimer=setTimeout(flush,700)}
+  else if(!cloud.db)setSync('local');
+}
+function clone(o){return JSON.parse(JSON.stringify(o))}
+function sj(v){
+  if(v===null||typeof v!=='object')return JSON.stringify(v)||'null';
+  if(Array.isArray(v))return '['+v.map(sj).join(',')+']';
+  return '{'+Object.keys(v).filter(function(k){return v[k]!==undefined}).sort().map(function(k){return JSON.stringify(k)+':'+sj(v[k])}).join(',')+'}';
+}
+var NAV_ACTS={tab:1,'goto-sklad':1,'goto-team':1,'goto-events':1,'open-event':1,back:1,'sync-info':1,'close-sheet':1,'copy-text':1,'export-event':1,'export-all':1,'export-stock':1,'export-team':1,'export-json':1,'edit-ing':1,'edit-drink':1,'edit-member':1,'edit-event':1};
+var ADMIN_ACTS={'new-drink':1,'save-drink':1,'del-drink':1,'d-color':1,'d-add-row':1,'d-del-row':1,'new-member':1,'save-member':1,'del-member':1,'member-paid-all':1,'del-event':1,'wipe-all':1,'del-demo':1,restore:1,'restore-apply':1};
+function actOK(a){if(NAV_ACTS[a])return true;if(ADMIN_ACTS[a])return perm.admin;return perm.write}
+function lockUI(root){
+  $$('[data-act]',root).forEach(function(b){b.disabled=!actOK(b.dataset.act)});
+  $$('[data-f]',root).forEach(function(el){var f=el.dataset.f;el.disabled=!(f.indexOf('set:')===0?perm.admin:perm.write)});
+}
+function lockSheet(){
+  if(!sheet)return;
+  var t=sheet.type,locked=(t==='drink'||t==='member'||t==='restore')?!perm.admin:(t==='info'?false:!perm.write);
+  $$('[data-act]',$('#sheet')).forEach(function(b){var a=b.dataset.act;if(a==='close-sheet'||a==='copy-text')return;b.disabled=!actOK(a)});
+  if(locked)$$('input,select,textarea',$('#sheetBody')).forEach(function(el){el.disabled=true});
+}
+function localDocs(){
+  var m={};
+  COLLS.forEach(function(c){state[c].forEach(function(x){if(x.o==null)x.o=oCounter++;m[c+'/'+x.id]=x})});
+  m['settings/main']=state.settings;
+  return m;
+}
+function canWriteKey(k){return (k.indexOf('settings/')===0||k.indexOf('drinks/')===0||k.indexOf('team/')===0)?perm.admin:perm.write}
+function describe(coll,old,n){
+  if(!old)return '';
+  function ch(f){return sj(old[f])!==sj(n[f])}
+  var out=[];
+  if(coll==='events'){
+    if(ch('name')||ch('date')||ch('place')||ch('note'))out.push('údaje');
+    if(ch('sales')||ch('otherRevenue'))out.push('prodeje');
+    if(ch('staff'))out.push('zaměstnanci');
+    if(ch('costs'))out.push('náklady');
+    if(ch('plan')||ch('planTotal'))out.push('plán nákupu');
+    if(ch('stockApplied'))out.push('odečet ze skladu');
+  }else if(coll==='ingredients'){
+    if(ch('stock'))out.push('sklad '+nf1.format(old.stock||0)+' → '+nf1.format(n.stock||0)+' '+(n.unit||''));
+    if(ch('name')||ch('pack')||ch('price')||ch('min')||ch('unit')||ch('cat'))out.push('údaje');
+  }else if(coll==='drinks'){
+    if(ch('price'))out.push('cena '+nf0.format(old.price||0)+' → '+nf0.format(n.price||0)+' Kč');
+    if(ch('items'))out.push('receptura');
+    if(ch('name')||ch('color')||ch('active'))out.push('údaje');
+  }else if(coll==='team'){out.push('údaje')}
+  else if(coll==='settings'){
+    var lb={feePct:'poplatek',reservePct:'rezerva',defaultRate:'sazba',targetPct:'cíl nákladů',investment:'investice',importMap:'přiřazení importu'};
+    Object.keys(lb).forEach(function(k){if(ch(k))out.push(lb[k])});
+  }
+  return out.join(', ');
+}
+function logChange(k,oldJs,obj){
+  if(!cloud.uid||cloud.silent)return;
+  var p=k.split('/'),coll=p[0],id=p[1],old=null;
+  try{old=oldJs?JSON.parse(oldJs):null}catch(e){}
+  var op=obj==null?'smazal':(old?'upravil':'přidal');
+  var name=(obj||old||{}).name||(coll==='settings'?'Parametry':id);
+  var sum=obj?describe(coll,old,obj):'';
+  var now=Date.now(),last=myLog[myLog.length-1];
+  if(last&&last.k===coll&&last.i===id&&last.op===op&&now-last.t<600000){
+    last.t=now;last.n=name;
+    var a=(last.s?last.s.split(', '):[]);sum.split(', ').forEach(function(x){if(x&&a.indexOf(x)<0)a.push(x)});last.s=a.join(', ');
+  }else myLog.push({t:now,k:coll,i:id,n:name,op:op,s:sum});
+  if(myLog.length>120)myLog.splice(0,myLog.length-120);
+  logDirty=true;
+}
+function flushLog(){
+  if(!cloud.ready||!cloud.uid||!logDirty||logWriting||!perm.write)return;
+  logWriting=true;logDirty=false;
+  cloud.db.doc('log/'+cloud.uid).set({entries:myLog.slice()}).catch(function(){logDirty=true}).then(function(){logWriting=false;if(logDirty)setTimeout(flushLog,2000)});
+}
+function revertLocal(k,old){
+  var p=k.split('/'),c=p[0],id=p[1];
+  if(c==='settings'){if(old)state.settings=JSON.parse(old);return}
+  var arr=state[c],i=arr.findIndex(function(x){return x.id===id});
+  if(old){var o=JSON.parse(old);if(i>-1)arr[i]=o;else arr.push(o)}
+  else if(i>-1)arr.splice(i,1);
 }
 function flush(){
-  if(!dbDoc)return;
-  if(writing){pendingWrite=true;return}
-  writing=true;
-  dbDoc.set({json:JSON.stringify(state),rev:localRev,by:clientId}).then(function(){setSync('cloud')}).catch(function(e){
-    setSync(e&&e.code==='invalid_argument'?'readonly':'error');
-  }).then(function(){writing=false;if(pendingWrite){pendingWrite=false;flush()}});
+  if(!cloud.ready||!perm.write)return Promise.resolve();
+  if(cloud.flushing){cloud.again=true;return cloud.flushP||Promise.resolve()}
+  cloud.flushing=true;cloud.again=false;
+  var docs=localDocs(),jobs=[],failed=[];
+  Object.keys(docs).forEach(function(k){var js=sj(docs[k]);if(cloud.known[k]!==js)jobs.push({k:k,js:js,obj:docs[k]})});
+  Object.keys(cloud.known).forEach(function(k){if(!(k in docs))jobs.push({k:k,del:true})});
+  var chain=Promise.resolve();
+  jobs.forEach(function(j){
+    chain=chain.then(function(){
+      var old=cloud.known[j.k];
+      if(!canWriteKey(j.k)){failed.push({k:j.k,old:old,code:'perm'});return}
+      var ref=cloud.db.doc(j.k);
+      if(j.del)return ref.delete().then(function(){delete cloud.known[j.k];logChange(j.k,old,null)}).catch(function(e){failed.push({k:j.k,old:old,code:e&&e.code})});
+      cloud.known[j.k]=j.js;
+      return ref.set(JSON.parse(j.js)).then(function(){logChange(j.k,old,j.obj)}).catch(function(e){
+        if(old===undefined)delete cloud.known[j.k];else cloud.known[j.k]=old;
+        failed.push({k:j.k,old:old,code:e&&e.code});
+      });
+    });
+  });
+  cloud.flushP=chain.then(function(){
+    cloud.flushing=false;
+    if(failed.length){
+      var perms=failed.filter(function(f){return f.code==='perm'||f.code==='invalid_argument'});
+      if(perms.length){
+        perms.forEach(function(f){revertLocal(f.k,f.old)});
+        state=normalize(state);
+        var d2=localDocs();perms.forEach(function(f){if(d2[f.k])cloud.known[f.k]=sj(d2[f.k]);else delete cloud.known[f.k]});
+        persistLocal();setSync('readonly');toast('Tuhle změnu nemáš oprávnění uložit, vrátil jsem ji.');render();
+      }else{setSync('error');toast('Uložení se nepovedlo, zkus to znovu.')}
+    }else setSync('cloud');
+    flushLog();
+    if(cloud.again){cloud.again=false;return flush()}
+  });
+  return cloud.flushP;
 }
-function adoptRemote(d){
-  try{state=normalize(JSON.parse(d.json));localRev=d.rev||0;persistLocal();scheduleRender()}catch(e){}
+function applyRemote(){
+  if(!cloud.ready)return;
+  var docs=localDocs(),clean=[],next={ingredients:[],drinks:[],events:[],team:[]};
+  COLLS.forEach(function(c){
+    var rem=cloud.snaps[c]||{},seen={},out=next[c];
+    Object.keys(rem).forEach(function(id){
+      var k=c+'/'+id,loc=docs[k];seen[id]=1;
+      if((k in cloud.known)&&!loc)return;
+      if(loc&&sj(loc)!==cloud.known[k]){out.push(loc);return}
+      out.push(rem[id]);clean.push({k:k,o:rem[id]});
+    });
+    state[c].forEach(function(x){
+      if(seen[x.id])return;
+      var k=c+'/'+x.id;
+      if(!(k in cloud.known)||sj(x)!==cloud.known[k])out.push(x);
+      else delete cloud.known[k];
+    });
+    out.sort(function(a,b){return (a.o||0)-(b.o||0)});
+  });
+  var rs=cloud.snaps.settings&&cloud.snaps.settings.main,ks='settings/main',st=state.settings,cleanSet=false;
+  var dirtySet=(ks in cloud.known)&&sj(state.settings)!==cloud.known[ks];
+  if(!dirtySet){if(rs){st=rs;cleanSet=true}else if(!perm.admin)cleanSet=true}
+  state=normalize({settings:st,ingredients:next.ingredients,drinks:next.drinks,events:next.events,team:next.team});
+  clean.forEach(function(c){cloud.known[c.k]=sj(c.o)});
+  if(cleanSet)cloud.known[ks]=sj(state.settings);
+  persistLocal();scheduleRender();
+}
+function tryEnter(){
+  if(cloud.ready)return;
+  var all=COLLS.concat(['settings']).every(function(c){return cloud.got[c]});
+  if(!all)return;
+  state=emptyState();cloud.known={};cloud.ready=true;
+  applyRemote();setSync(perm.write?'cloud':'readonly');
+  if(!myLog.length&&allLogs[cloud.uid])myLog=allLogs[cloud.uid].slice();
 }
 var renderTries=0;
 function scheduleRender(){
@@ -364,26 +511,75 @@ function scheduleRender(){
   if(sheet&&sheet.type!=='info')return;
   render();
 }
+function loadPerm(){
+  var u=cloud.user;
+  if(!u)return Promise.resolve();
+  return Promise.all([u.isOwner(),u.canEdit(),u.can('data.write'),u.me()]).then(function(r){
+    perm.owner=!!r[0];perm.admin=!!(r[0]||r[1]);
+    perm.write=perm.admin||r[2]!==false;
+    cloud.uid=(r[3]&&r[3].id)||'';perm.name=(r[3]&&r[3].name)||'';
+    perm.role=perm.owner?'Vlastník':perm.admin?'Správce (Editor)':perm.write?'Přispěvatel (Contributor)':'Jen čtení (Viewer)';
+  }).catch(function(){});
+}
+function needNames(){
+  if(!cloud.user)return;
+  var ids=Object.keys(allLogs).concat(cloud.uid?[cloud.uid]:[]).filter(function(i){return i&&!(i in names)});
+  if(!ids.length)return;
+  cloud.user.profiles(ids).then(function(ps){
+    ids.forEach(function(i){names[i]=(ps[i]&&ps[i].name)||'Uživatel'});
+    if(view.tab==='more'&&!sheet)render();
+  }).catch(function(){ids.forEach(function(i){names[i]='Uživatel'})});
+}
+function initialize(){
+  var db=cloud.db;setSync('saving');
+  Promise.all([db.collection('ingredients').limit(1).get(),db.collection('events').limit(1).get(),db.doc('app/state').get()]).then(function(r){
+    if(!r[0].empty||!r[1].empty){
+      return db.doc('meta/init').set({by:cloud.uid,t:Date.now()}).then(function(){cloud.waiting=true;tryEnter()});
+    }
+    var ls=r[2];
+    if(ls.exists){try{var d=ls.data();if(d&&d.json&&(d.rev||0)>=localRev)state=normalize(JSON.parse(d.json))}catch(e){}}
+    cloud.silent=true;cloud.ready=true;
+    return flush().then(function(){return db.doc('meta/init').set({by:cloud.uid,t:Date.now()})}).then(function(){
+      cloud.silent=false;
+      if(cloud.uid){myLog.push({t:Date.now(),k:'settings',i:'main',n:'Aplikace',op:'založil',s:''});logDirty=true;flushLog()}
+      setSync('cloud');
+    });
+  }).catch(function(){cloud.silent=false;setSync('error')});
+}
+function startSync(){
+  var db=cloud.db;
+  COLLS.concat(['settings']).forEach(function(c){
+    db.collection(c).onSnapshot(function(snap){
+      var m={};snap.docs.forEach(function(d){if(d.exists)m[d.id]=clone(d.data())});
+      cloud.snaps[c]=m;cloud.got[c]=true;
+      if(cloud.ready)applyRemote();else if(cloud.waiting)tryEnter();
+    },function(){setSync('error')});
+  });
+  db.collection('log').onSnapshot(function(snap){
+    snap.docs.forEach(function(d){if(d.exists){var x=d.data();allLogs[d.id]=Array.isArray(x.entries)?clone(x.entries):[]}});
+    if(!myLog.length&&cloud.uid&&allLogs[cloud.uid])myLog=allLogs[cloud.uid].slice();
+    if(view.tab==='more'&&!sheet){needNames();scheduleRender()}
+  },function(){});
+  db.doc('meta/init').get().then(function(sn){
+    if(sn.exists){cloud.waiting=true;tryEnter()}
+    else if(perm.admin)initialize();
+    else{
+      setSync('local');toast('Čeká se, až správce aplikaci poprvé otevře.');
+      db.doc('meta/init').onSnapshot(function(s2){if(s2.exists&&!cloud.ready&&!cloud.waiting){cloud.waiting=true;tryEnter()}},function(){});
+    }
+  }).catch(function(){setSync('error')});
+}
 function initDb(){
   if(!(window.claude&&typeof window.claude.use==='function'))return;
-  window.claude.use('db').then(function(db){
-    if(!db)return;
-    dbDoc=db.doc('app/state');
-    var first=true;
-    dbDoc.onSnapshot(function(snap){
-      var d=snap.exists?snap.data():null;
-      if(first){
-        first=false;
-        if(d&&d.json){
-          if((d.rev||0)>localRev||localRev===0){adoptRemote(d);setSync('cloud')}
-          else{setSync('saving');flush()}
-        }else if(localRev>0){setSync('saving');flush()}
-        else setSync('cloud');
-        return;
-      }
-      if(d&&d.json&&d.by!==clientId&&(d.rev||0)>localRev){adoptRemote(d);setSync('cloud')}
-    },function(){setSync('error')});
-  }).catch(function(){});
+  Promise.all([window.claude.use('db'),window.claude.use('user')]).then(function(r){
+    if(!r[0])return;
+    cloud.db=r[0];cloud.user=r[1];
+    return loadPerm().then(function(){
+      if(!perm.write)setSync('readonly');
+      render();if(sheet)renderSheet();
+      startSync();
+    });
+  }).catch(function(){setSync('error')});
 }
 
 /* ================= calculations ================= */
@@ -690,9 +886,27 @@ function renderTeam(){
 function setField(label,key,hint,suffix){
   return '<div class="field"><label for="set-'+key+'">'+label+'</label><input class="in" id="set-'+key+'" inputmode="decimal" data-f="set:'+key+'" value="'+numStr(state.settings[key])+'">'+(hint?'<small>'+hint+'</small>':'')+'</div>';
 }
+function fwhen(t){return new Date(t).toLocaleString('cs-CZ',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})}
+function accountHtml(){
+  if(!cloud.db)return '';
+  return '<section class="sec"><div class="sec-h"><h2>Účet a přístup</h2></div><div class="panel"><div style="display:flex;align-items:center;gap:12px"><span class="avatar">'+esc((perm.name||'?').charAt(0).toUpperCase())+'</span><div class="grow"><b>'+esc(perm.name||'Přihlášený uživatel')+'</b><br><small>Role: '+esc(perm.role)+'</small></div></div><p class="hint">Lidi přidáš v nabídce <b>Sdílet</b> u této stránky v claude.ai (pozvánkou e-mailem). Role Editor je správce a smí všechno. Contributor zadává prodeje, zaměstnance u akcí a stav skladu. Viewer vše jen vidí. Bez přihlášení se k datům nikdo nedostane.</p></div></section>';
+}
+function historyHtml(){
+  if(!cloud.db)return '';
+  var rows=[];
+  Object.keys(allLogs).forEach(function(u){(allLogs[u]||[]).forEach(function(e){rows.push({u:u,e:e})})});
+  rows.sort(function(a,b){return b.e.t-a.e.t});rows=rows.slice(0,60);
+  var h='<section class="sec"><div class="sec-h"><h2>Historie změn</h2></div>';
+  if(!rows.length)return h+'<div class="empty"><p>Zatím žádné změny. Tady uvidíš, kdo co upravil.</p></div></section>';
+  return h+'<div class="list">'+rows.map(function(r){
+    var e=r.e,who=names[r.u]||(r.u===cloud.uid&&perm.name)||'Uživatel';
+    var what=e.op==='založil'?'založil data aplikace':esc(e.op)+' '+(KIND_ACC[e.k]||'')+' <b>'+esc(e.n)+'</b>';
+    return '<div class="item"><div class="grow"><div class="t" style="font-weight:500"><b>'+esc(who)+'</b> '+what+'</div><small>'+esc(e.s||'')+(e.s?' · ':'')+fwhen(e.t)+'</small></div></div>';
+  }).join('')+'</div></section>';
+}
 function renderMore(){
   var demo=state.events.some(function(e){return e.demo});
-  var h=pageHead('Více','Nastavení, SumUp a data');
+  var h=pageHead('Více','Nastavení, SumUp a data')+accountHtml();
   h+='<section class="sec"><div class="sec-h"><h2>Parametry</h2></div><div class="panel">'+
     setField('Poplatek terminálu (%)','feePct','Procento z tržby, které si bere SumUp. Uprav podle své smlouvy.')+
     setField('Rezerva při nákupu (%)','reservePct','Přidá se k vypočtené spotřebě, ať nedojde zásoba.')+
@@ -700,9 +914,10 @@ function renderMore(){
     setField('Cílový podíl nákladů na drink (%)','targetPct','Podle něj se barví štítky u drinků a počítá doporučená cena.')+
     setField('Počáteční investice (Kč)','investment','Vybavení, terminál, shakery. Přehled ukáže, kdy se vrátí.')+'</div></section>';
   h+='<section class="sec"><div class="sec-h"><h2>Jak na SumUp</h2></div><div class="panel"><p>1. V SumUpu si pro 6 drinků vytvoř položky ve stejných názvech, jaké máš tady. Prodeje se pak dají třídit podle drinku.</p><p>2. Po akci v SumUp dashboardu stáhni export prodejů nebo transakcí za dobu akce jako CSV.</p><p>3. V detailu akce klepni na <b>Import ze SumUpu</b>, nahraj soubor a zkontroluj přiřazení sloupců a drinků. Příště si názvy pamatuju.</p><p class="hint">Aplikace nemůže zapisovat do terminálu. Prodej se vždy zadává v SumUpu, tady se data jen načítají.</p></div></section>';
-  h+='<section class="sec"><div class="sec-h"><h2>Data</h2></div><div class="panel"><p class="hint">'+(dbDoc?'Data se ukládají do cloudu u této aplikace a sdílejí se s lidmi, kteří ji smějí upravovat. Kopie je i v tomto prohlížeči.':'Data jsou jen v tomto prohlížeči. Dělej si zálohy do JSON.')+'</p><div class="actions"><button class="btn" type="button" data-act="export-all">Všechny akce (CSV)</button><button class="btn" type="button" data-act="export-stock">Sklad (CSV)</button><button class="btn" type="button" data-act="export-team">Tým (CSV)</button><button class="btn" type="button" data-act="export-json">Záloha (JSON)</button><button class="btn" type="button" data-act="restore">Obnovit ze zálohy</button></div>'+
+  h+='<section class="sec"><div class="sec-h"><h2>Data</h2></div><div class="panel"><p class="hint">'+(cloud.db?'Data se ukládají do cloudu u této aplikace a sdílejí se s lidmi, kteří ji smějí upravovat. Kopie je i v tomto prohlížeči.':'Data jsou jen v tomto prohlížeči. Dělej si zálohy do JSON.')+'</p><div class="actions"><button class="btn" type="button" data-act="export-all">Všechny akce (CSV)</button><button class="btn" type="button" data-act="export-stock">Sklad (CSV)</button><button class="btn" type="button" data-act="export-team">Tým (CSV)</button><button class="btn" type="button" data-act="export-json">Záloha (JSON)</button><button class="btn" type="button" data-act="restore">Obnovit ze zálohy</button></div>'+
     (demo?'<button class="btn" type="button" data-act="del-demo" data-confirm="Opravdu smazat?">Smazat ukázkové akce</button>':'')+
     '<button class="btn danger" type="button" data-act="wipe-all" data-confirm="Smazat úplně vše?">Smazat všechna data</button></div></section>';
+  h+=historyHtml();
   return h;
 }
 
@@ -710,7 +925,9 @@ function render(reset){
   var y=window.scrollY||0;
   var h;
   if(view.tab==='dash')h=renderDash();else if(view.tab==='events')h=view.eventId?renderEvent(view.eventId):renderEvents();else if(view.tab==='drinks')h=renderDrinks();else if(view.tab==='ings')h=renderIngs();else if(view.tab==='team')h=renderTeam();else h=renderMore();
-  $('#app').innerHTML=h;
+  $('#app').innerHTML=(perm.write?'':'<div class="note warn"><span>Máš oprávnění jen ke čtení. Změny zadávat nemůžeš.</span></div>')+h;
+  lockUI($('#app'));
+  if(view.tab==='more')needNames();
   $('#tabs').innerHTML=TABS.map(function(t){return '<button class="tab" type="button" data-act="tab" data-tab="'+t[0]+'"'+(view.tab===t[0]?' aria-current="page"':'')+'><svg viewBox="0 0 24 24" aria-hidden="true">'+ICONS[t[0]]+'</svg>'+t[1]+'</button>'}).join('');
   persistView();
   try{window.scrollTo(0,reset?0:y)}catch(e){}
@@ -808,7 +1025,7 @@ function renderSheet(fresh){
     b='<p class="hint">'+esc(sheet.hint||'')+'</p><textarea class="in" id="infoText" rows="10" readonly>'+esc(sheet.text||'')+'</textarea>';
     f=btn('Zavřít','close-sheet')+btn('Kopírovat','copy-text','primary');
   }
-  $('#sheetTitle').textContent=t;body.innerHTML=b;foot.innerHTML=f;
+  $('#sheetTitle').textContent=t;body.innerHTML=b;foot.innerHTML=f;lockSheet();
   body.scrollTop=fresh?0:st;
 }
 
@@ -975,6 +1192,7 @@ function armBtn(t){
 
 function onClick(ev){
   var t=ev.target.closest('[data-act]');if(!t)return;
+  if(!actOK(t.dataset.act)){toast('Na tohle nemáš oprávnění.');return}
   if(t.dataset.confirm&&!t.classList.contains('armed')){armBtn(t);return}
   var act=t.dataset.act,e=curEvent(),id=t.dataset.id;
   switch(act){
