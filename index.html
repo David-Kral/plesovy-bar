@@ -213,6 +213,29 @@ button.item:disabled{opacity:.6}
 .avatar{width:38px;height:38px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;font:700 16px var(--font-display);flex:none}
 .check.sm{font-size:13px;color:var(--muted);align-items:center;gap:6px}
 .check.sm input{width:18px;height:18px;margin:0}
+
+/* desktop: sidebar navigation + two-column content */
+@media (min-width:1000px){
+  .top-in{max-width:none;padding:12px 28px}
+  .tabs{top:56px;bottom:auto;right:auto;width:216px;height:calc(100vh - 56px);border-top:0;border-right:1px solid var(--line);padding:16px 12px}
+  .tabs-in{max-width:none;display:flex;flex-direction:column;gap:4px}
+  .tab{flex-direction:row;justify-content:flex-start;gap:12px;min-height:44px;padding:0 14px;font-size:15px;border-radius:12px}
+  .tab:hover{background:var(--surface-2)}
+  .tab[aria-current=page]{background:var(--accent-soft)}
+  main{margin:0 0 0 216px;max-width:1224px;padding:26px 28px 60px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:26px 28px;align-items:start}
+  main>.page-h,main>.hero,main>.note,main>.crumb,main>.empty,main>.hint,main>.list,main>.sec.wide{grid-column:1/-1}
+  .sheet{border-radius:20px}
+  .sheet-wrap{align-items:center}
+}
+.kbd{display:inline-block;min-width:22px;padding:1px 6px;border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;background:var(--surface);font:600 12px var(--font-body);text-align:center}
+.seg{display:flex;gap:8px;flex-wrap:wrap}
+.seg .btn[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+@media print{
+  .top,.tabs,.sheet-wrap,.btn,#toast,.crumb,.actions,.stepper{display:none!important}
+  body{background:#fff;color:#000}
+  main{margin:0;max-width:none;display:block;padding:0}
+  .sec{break-inside:avoid;margin-bottom:18px}
+}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 
@@ -364,7 +387,7 @@ function sj(v){
   if(Array.isArray(v))return '['+v.map(sj).join(',')+']';
   return '{'+Object.keys(v).filter(function(k){return v[k]!==undefined}).sort().map(function(k){return JSON.stringify(k)+':'+sj(v[k])}).join(',')+'}';
 }
-var NAV_ACTS={tab:1,'goto-sklad':1,'goto-team':1,'goto-events':1,'open-event':1,back:1,'sync-info':1,'close-sheet':1,'copy-text':1,'export-event':1,'export-all':1,'export-stock':1,'export-team':1,'export-json':1,'edit-ing':1,'edit-purchase':1,'edit-drink':1,'edit-member':1,'edit-event':1};
+var NAV_ACTS={tab:1,'goto-sklad':1,'goto-team':1,'goto-events':1,'open-event':1,back:1,'sync-info':1,'close-sheet':1,'copy-text':1,'export-event':1,print:1,theme:1,'export-all':1,'export-stock':1,'export-team':1,'export-json':1,'edit-ing':1,'edit-purchase':1,'edit-drink':1,'edit-member':1,'edit-event':1};
 var ADMIN_ACTS={'new-drink':1,'save-drink':1,'del-drink':1,'d-color':1,'d-add-row':1,'d-del-row':1,'new-member':1,'save-member':1,'del-member':1,'member-paid-all':1,'del-event':1,'wipe-all':1,'del-demo':1,restore:1,'restore-apply':1};
 function actOK(a){if(NAV_ACTS[a])return true;if(ADMIN_ACTS[a])return perm.admin;return perm.write}
 function lockUI(root){
@@ -797,6 +820,13 @@ function renderDash(){
         return '<div class="bar-row"><div class="bar-top"><i class="dot" style="background:'+esc(t.d.color)+'"></i><b>'+esc(t.d.name)+'</b><span class="v">'+nf0.format(t.qty)+NB+'ks</span></div><div class="track"><span style="width:'+(t.qty/mx*100).toFixed(1)+'%;background:'+esc(t.d.color)+'"></span></div><small>Tržba '+kc(t.rev)+' · hrubý zisk '+kc(pr)+' · '+kc(pr/t.qty)+' na kus</small></div>';
       }).join('')+'</div></section>';
     }
+    var pl2=Object.keys(T.drinks).map(function(k){return T.drinks[k]}).map(function(t){return {t:t,p:t.rev-t.cost}}).sort(function(a,b){return b.p-a.p});
+    if(pl2.length){
+      var mp=Math.max(1,pl2[0].p);
+      h+='<section class="sec"><div class="sec-h"><h2>Nejziskovější drinky</h2></div><div class="panel bars">'+pl2.slice(0,10).map(function(x,i){
+        return '<div class="bar-row"><div class="bar-top"><i class="dot" style="background:'+esc(x.t.d.color)+'"></i><b>'+(i+1)+'. '+esc(x.t.d.name)+'</b><span class="v">'+kc(x.p)+'</span></div><div class="track"><span style="width:'+Math.max(0,x.p/mp*100).toFixed(1)+'%;background:'+esc(x.t.d.color)+'"></span></div><small>'+nf0.format(x.t.qty)+NB+'ks · '+kc(x.t.qty?x.p/x.t.qty:0)+' zisk na kus</small></div>';
+      }).join('')+'</div></section>';
+    }
     h+='<section class="sec"><div class="sec-h"><h2>Kam jdou peníze</h2></div><div class="panel">'+stackBar([{k:'ing',l:'Suroviny',v:T.ing},{k:'staff',l:'Mzdy',v:T.staff},{k:'other',l:'Nájem a ostatní',v:T.other},{k:'fee',l:'Poplatky terminálu',v:T.fee}])+'</div></section>';
   }
   var up=state.events.filter(function(e){return e.date>=todayStr()&&calc(e).rev===0}).sort(function(a,b){return a.date<b.date?-1:1})[0];
@@ -862,6 +892,12 @@ function renderEvent(id){
     '<div class="stat"><span class="lab">Čistý zisk</span><b data-live="k-profit" data-signed class="'+(c.profit<0?'neg':'')+'">'+kc(c.profit)+'</b></div>'+
     '<div class="stat"><span class="lab">Marže</span><b data-live="k-margin">'+(c.rev>0?pc(c.margin):'—')+'</b></div></div></section>';
   h+='<section class="sec"><div class="sec-h"><h2>Náklady</h2></div><div class="panel">'+stackBar([{k:'ing',l:'Suroviny',v:c.ing},{k:'staff',l:'Mzdy',v:c.staff},{k:'other',l:'Nájem a ostatní',v:c.other},{k:'fee',l:(e.feeActual!=null?'Poplatek terminálu (skutečný)':'Poplatek terminálu ('+pc(state.settings.feePct)+')'),v:c.fee}],true)+'</div></section>';
+  var hrs=e.staff.reduce(function(a,x){return a+(x.hours||0)},0),fixedC=c.staff+c.other,avgM=c.units>0?(c.rev-c.ing-c.fee)/c.units:0;
+  if(c.units>0)h+='<section class="sec"><div class="sec-h"><h2>Ukazatele</h2></div><div class="panel"><div class="stats cols2">'+
+    '<div class="stat"><span class="lab">Zisk na drink</span><b>'+kc(c.profit/c.units)+'</b></div>'+
+    '<div class="stat"><span class="lab">Tržba na drink</span><b>'+kc(c.rev/c.units)+'</b></div>'+
+    '<div class="stat"><span class="lab">Zisk na hodinu práce</span><b>'+(hrs>0?kc(c.profit/hrs):'—')+'</b></div>'+
+    '<div class="stat"><span class="lab">Bod zlomu</span><b>'+(avgM>0&&fixedC>0?nf0.format(Math.ceil(fixedC/avgM))+NB+'ks':'—')+'</b><small>drinků na pokrytí mezd a nájmu</small></div></div></div></section>';
   // sales
   h+='<section class="sec"><div class="sec-h"><h2>Prodeje</h2><button class="btn primary sm" type="button" data-act="open-import">Import ze SumUpu</button></div><div class="list">';
   if(!c.rows.length)h+='<div class="item"><small>Nejdřív přidej drinky v záložce Drinky.</small></div>';
@@ -896,13 +932,13 @@ function renderEvent(id){
   h+='<section class="sec"><div class="sec-h"><h2>Plán nákupu</h2></div><div class="panel"><div class="grid2"><div class="field"><label for="planTotal">Očekávaný počet drinků</label><input class="in" id="planTotal" inputmode="numeric" data-f="plan-total" value="'+(e.planTotal||'')+'" placeholder="např. 600"></div><div class="field"><label>&nbsp;</label><button class="btn" type="button" data-act="plan-split">Rozdělit podle historie</button></div></div><div class="plan-grid">'+
     state.drinks.filter(function(d){return d.active}).map(function(d){return '<label class="pg"><span><i class="dot" style="background:'+esc(d.color)+'"></i>'+esc(d.name)+'</span><input class="in" inputmode="numeric" data-f="plan-qty" data-d="'+d.id+'" value="'+(e.plan[d.id]||'')+'" placeholder="0"></label>'}).join('')+
     '</div><div id="shopList">'+shopHtml(e)+'</div></div></section>';
-  h+='<section class="sec"><div class="actions"><button class="btn" type="button" data-act="export-event">Export akce (CSV)</button><button class="btn" type="button" data-act="dup-event">Duplikovat akci</button><button class="btn danger" type="button" data-act="del-event" data-confirm="Opravdu smazat?">Smazat akci</button></div></section>';
+  h+='<section class="sec"><div class="actions"><button class="btn" type="button" data-act="export-event">Export akce (CSV)</button><button class="btn" type="button" data-act="print">Tisk / PDF</button><button class="btn" type="button" data-act="dup-event">Duplikovat akci</button><button class="btn danger" type="button" data-act="del-event" data-confirm="Opravdu smazat?">Smazat akci</button></div></section>';
   return h;
 }
 
 function drinkItem(d,m){
   var cost=drinkCost(d,m),share=d.price>0?cost/d.price*100:0,cls=costClass(share);
-  return '<button class="item" type="button" data-act="edit-drink" data-id="'+d.id+'"><i class="dot" style="background:'+esc(d.color)+';width:14px;height:14px"></i><div class="grow"><div class="t">'+esc(d.name)+'</div><small>Náklad '+kc(cost,2)+' · '+(d.items.length?d.items.length+' '+plural(d.items.length,'surovina','suroviny','surovin'):'orientačně')+'</small></div><div class="r"><b>'+kc(d.price)+'</b><span class="pill '+cls+'">náklad '+pc(share)+'</span></div></button>';
+  return '<button class="item" type="button" data-act="edit-drink" data-id="'+d.id+'"><i class="dot" style="background:'+esc(d.color)+';width:14px;height:14px"></i><div class="grow"><div class="t">'+esc(d.name)+'</div><small>Náklad '+kc(cost,2)+' · '+(d.items.length?d.items.length+' '+plural(d.items.length,'surovina','suroviny','surovin'):'orientačně')+'</small></div><div class="r"><b>'+kc(d.price)+'</b><small>zisk '+kc(d.price-cost)+'</small> <span class="pill '+cls+'">náklad '+pc(share)+'</span></div></button>';
 }
 function renderDrinks(){
   var m=ingMap(),act=state.drinks.filter(function(d){return d.active}),arch=state.drinks.filter(function(d){return !d.active});
@@ -996,6 +1032,7 @@ function historyHtml(){
 function renderMore(){
   var demo=state.events.some(function(e){return e.demo});
   var h=pageHead('Více','Nastavení, SumUp a data')+accountHtml();
+  h+='<section class="sec"><div class="sec-h"><h2>Vzhled</h2></div><div class="panel"><div class="seg">'+[['auto','Podle systému'],['light','Světlý'],['dark','Tmavý']].map(function(x){return '<button class="btn" type="button" data-act="theme" data-v="'+x[0]+'" aria-pressed="'+(getTheme()===x[0])+'">'+x[1]+'</button>'}).join('')+'</div><p class="hint">Na počítači jdou záložky přepínat klávesami <span class="kbd">1</span> až <span class="kbd">6</span>, okno zavřeš klávesou <span class="kbd">Esc</span>.</p></div></section>';
   h+='<section class="sec"><div class="sec-h"><h2>Parametry</h2></div><div class="panel">'+
     setField('Poplatek terminálu (%)','feePct','Procento z tržby, které si bere SumUp. Uprav podle své smlouvy.')+
     setField('Rezerva při nákupu (%)','reservePct','Přidá se k vypočtené spotřebě, ať nedojde zásoba.')+
@@ -1297,6 +1334,8 @@ function onClick(ev){
   var act=t.dataset.act,e=curEvent(),id=t.dataset.id;
   switch(act){
     case 'tab':go(t.dataset.tab);break;
+    case 'print':try{window.print()}catch(err){}break;
+    case 'theme':setTheme(t.dataset.v);render();break;
     case 'goto-events':go('events');break;
     case 'open-event':go('events',id);break;
     case 'back':go('events');break;
@@ -1577,11 +1616,25 @@ if(view.eventId&&!state.events.some(function(e){return e.id===view.eventId}))vie
 document.addEventListener('click',onClick);
 document.addEventListener('input',onInput);
 document.addEventListener('change',onInput);
-document.addEventListener('keydown',function(ev){if(ev.key==='Escape'&&sheet)closeSheet()});
+var LS_THEME='plesovy-bar-theme';
+function setTheme(v){
+  try{localStorage.setItem(LS_THEME,v)}catch(e){}
+  try{if(v==='light'||v==='dark')document.documentElement.setAttribute('data-theme',v);else document.documentElement.removeAttribute('data-theme')}catch(e){}
+}
+function getTheme(){try{return localStorage.getItem(LS_THEME)||'auto'}catch(e){return 'auto'}}
+try{var th0=getTheme();if(th0==='light'||th0==='dark')document.documentElement.setAttribute('data-theme',th0)}catch(e){}
+document.addEventListener('keydown',function(ev){
+  if(ev.key==='Escape'&&sheet){closeSheet();return}
+  var a=document.activeElement,typing=a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA'||a.tagName==='SELECT');
+  if(typing||sheet||ev.ctrlKey||ev.metaKey||ev.altKey)return;
+  var n=parseInt(ev.key,10);
+  if(n>=1&&n<=TABS.length&&!(document.querySelector('#login')&&!document.querySelector('#login').hidden)){go(TABS[n-1][0])}
+});
 function boot(){setSync('local');render(true);initDb()}
 if(LOGIN_REQUIRED)gate(boot);else boot();
 })();
 </script>
+
 
 
 
